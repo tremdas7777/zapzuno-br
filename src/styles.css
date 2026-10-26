@@ -1,0 +1,455 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-blue: var(--blue);
+  --color-lime: var(--lime);
+  --color-sky: var(--sky);
+  --color-dark: var(--dark);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Paleta ZAPZUNO — azul-marinho nos textos, azul-ciano nos destaques e laranja nos botões. */
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --ink: #06162e;
+  --night: #06162e;
+  --blue: #0a84d0;
+  --blue-dark: #0769a8;
+  --lime: #ff7a1a;
+  --lime-deep: #c4520a;
+  --dark: #09121e;
+  /* Faixas claras (céu) e o leve verde do degradê. */
+  --sky: #f4f8ff;
+  --sky-strong: #e8f0ff;
+  --mint: #f4f8ff;
+  --bone: #f4f8ff;
+  --tile: #eef3fb;
+  --line: #e2e8f2;
+  /* Texto secundário. */
+  --slate: #586d8a;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+
+  --card: #ffffff;
+  --card-foreground: var(--ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink);
+
+  --primary: #1556e8;
+  --primary-dark: #0f43bd;
+  --primary-deep: #101c3b;
+  --primary-foreground: #ffffff;
+  --brand-tint: #e8f0ff;
+  --sale: #d92d4a;
+  --star: #101c3b;
+
+  --secondary: var(--paper);
+  --secondary-foreground: var(--ink);
+
+  --muted: #f4f8ff;
+  --muted-foreground: #586d8a;
+
+  --accent: #ffffff;
+  --accent-foreground: var(--ink);
+
+  --destructive: #d92d20;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f2;
+  --input: #cfd9e8;
+  --ring: var(--blue);
+
+  /* Superfícies dos componentes da vitrine (o tema galáxia troca todas). */
+  --fade-rgb: 255 255 255;
+  --card-bg: #ffffff;
+  --tint-blue: #f4f8ff;
+  --tint-lime: #f3fde4;
+  --chip-bg: rgba(255, 255, 255, 0.9);
+  --solid-bg: #101c3b;
+  --save: #13803c;
+  /* Texto em cima do laranja: sempre escuro. */
+  --on-lime: #06162e;
+  /* Texto em cima da cor de destaque (azul no tema claro, limão na galáxia). */
+  --on-blue: #ffffff;
+}
+
+/*
+ * Tema galáxia (vitrine): fundo de estrelas fixo atrás de tudo, textos claros e cartões de vidro
+ * escuro. O checkout e o admin ficam fora dele e continuam claros.
+ */
+.galaxy {
+  color-scheme: dark;
+  --ink: #f2f5ff;
+  --night: #f2f5ff;
+  /* Textos secundários também em branco (o cinza se perdia no fundo). */
+  --slate: #ffffff;
+  /* Na galáxia o destaque é o laranja da marca (o azul-marinho some no fundo escuro). */
+  --blue: #ff8a2b;
+  --blue-dark: #ff7a1a;
+  --on-blue: #06162e;
+  --cyan: #3fd0ff;
+  --line: rgba(160, 182, 255, 0.16);
+  --tile: rgba(255, 255, 255, 0.06);
+  --sky: rgba(255, 255, 255, 0.04);
+  --sky-strong: rgba(255, 255, 255, 0.07);
+  --mint: rgba(255, 255, 255, 0.04);
+  --bone: rgba(255, 255, 255, 0.05);
+
+  --background: #070b22;
+  --foreground: var(--ink);
+  --card: rgba(16, 24, 62, 0.6);
+  --card-foreground: var(--ink);
+  --popover: #0d1434;
+  --popover-foreground: var(--ink);
+  --primary: #ff7a1a;
+  --primary-foreground: #06162e;
+  --muted: rgba(255, 255, 255, 0.05);
+  --muted-foreground: #ffffff;
+  --accent: rgba(255, 255, 255, 0.06);
+  --accent-foreground: var(--ink);
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: var(--ink);
+  --border: rgba(160, 182, 255, 0.16);
+  --input: rgba(190, 205, 255, 0.26);
+  --ring: var(--blue);
+
+  --fade-rgb: 7 11 34;
+  --card-bg: rgba(14, 21, 56, 0.62);
+  --tint-blue: rgba(40, 190, 255, 0.13);
+  --tint-lime: rgba(255, 122, 26, 0.12);
+  --chip-bg: rgba(7, 11, 34, 0.78);
+  --solid-bg: rgba(60, 100, 255, 0.2);
+  --save: #6fe3ff;
+  color: var(--ink);
+}
+body:has(.galaxy) {
+  background-color: #070b22;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-weight: 400;
+  }
+  ::selection {
+    background: var(--lime);
+    color: var(--ink);
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 500;
+  }
+}
+
+@layer utilities {
+  .font-display { font-family: var(--font-display); }
+  .font-sans { font-family: var(--font-sans); }
+
+  .container-edge {
+    width: 100%;
+    max-width: 90rem;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 768px) {
+    .container-edge { padding-inline: 2rem; }
+  }
+
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--blue);
+  }
+  .galaxy .eyebrow { color: var(--cyan); }
+
+  /* Títulos de seção: condensado, caixa alta, pesado; a 2ª linha (em) vai em azul. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.015em;
+    line-height: 0.92;
+    color: var(--ink);
+  }
+  .display em {
+    font-style: normal;
+    color: var(--blue);
+  }
+  .galaxy .display em {
+    text-shadow: 0 0 26px rgba(255, 138, 43, 0.32);
+  }
+
+  /* Botão principal: laranja com a borda de baixo mais escura (efeito de tecla). */
+  .btn-lime {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: var(--lime);
+    color: var(--on-lime);
+    font-weight: 800;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 0.6rem;
+    box-shadow: inset 0 -4px 0 var(--lime-deep), 0 10px 24px -12px rgba(255, 110, 20, 0.6);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  }
+  .btn-lime:hover { filter: brightness(1.04); transform: translateY(-1px); }
+  .btn-lime:active { transform: translateY(1px); box-shadow: inset 0 -2px 0 var(--lime-deep); }
+
+  /* Botão de compra da página do produto: laranja mais intenso, letra branca grande, só "COMPRAR AGORA". */
+  .btn-buy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #ff9a3c, #f2650c);
+    color: #ffffff;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 0 rgba(110, 35, 0, 0.55), 0 2px 10px rgba(110, 35, 0, 0.45);
+    border-radius: 0.75rem;
+    box-shadow: inset 0 -5px 0 #b84a06, 0 16px 40px -16px rgba(255, 122, 26, 0.75);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  }
+  .btn-buy:hover { filter: brightness(1.05); transform: translateY(-1px); }
+  .btn-buy:active { transform: translateY(1px); box-shadow: inset 0 -2px 0 #b84a06; }
+
+  /* Botão de WhatsApp do rodapé: mesma tecla do .btn-lime, no verde do WhatsApp. */
+  .btn-whats {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: linear-gradient(180deg, #1fc75e, #12a148);
+    color: #ffffff;
+    text-shadow: 0 1px 0 rgba(0, 60, 25, 0.45), 0 2px 8px rgba(0, 60, 25, 0.35);
+    border-radius: 0.9rem;
+    box-shadow: inset 0 -4px 0 #0b7a35, 0 14px 34px -14px rgba(37, 211, 102, 0.7);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  }
+  .btn-whats:hover { filter: brightness(1.05); transform: translateY(-1px); }
+  .btn-whats:active { transform: translateY(1px); box-shadow: inset 0 -2px 0 #0b7a35; }
+  .btn-whats:focus-visible { outline: none; box-shadow: inset 0 -4px 0 #0b7a35, 0 0 0 4px rgba(37, 211, 102, 0.35); }
+
+  /* Link com seta e sublinhado ("VER O KIT ↗"). */
+  .text-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blue);
+  }
+
+  /* Faixa com o degradê azul → laranja da marca. */
+  .band-sky {
+    background:
+      radial-gradient(60rem 30rem at 100% 100%, rgba(255, 122, 26, 0.14), transparent 60%),
+      linear-gradient(180deg, #f6faff, #f3f8ff);
+  }
+  .galaxy .band-sky {
+    background:
+      radial-gradient(60rem 30rem at 100% 100%, rgba(255, 122, 26, 0.08), transparent 60%),
+      linear-gradient(180deg, rgba(20, 120, 200, 0.14), rgba(10, 30, 80, 0.1));
+  }
+
+  .card-soft {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    box-shadow: 0 18px 40px -28px rgba(16, 28, 59, 0.35);
+  }
+  .galaxy .card-soft {
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 24px 60px -34px rgba(0, 0, 0, 0.9);
+  }
+
+  .marquee {
+    display: flex;
+    width: max-content;
+    animation: marquee 38s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee { animation: none; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .rule {
+    display: inline-block;
+    width: 3rem;
+    height: 1px;
+    background-color: var(--color-foreground);
+  }
+
+  .reveal {
+    animation: fadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .text-balance { text-wrap: balance; }
+
+  /* Anti-cópia: bloqueia seleção de texto e arrastar imagens.
+     Inputs/textarea continuam selecionáveis para o usuário digitar. */
+  body {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
+  img {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    pointer-events: none;
+  }
+  a img, button img {
+    pointer-events: auto;
+  }
+
+  /* Legado: logos e ícones pequenos */
+  .store-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 1rem;
+  }
+
+  .store-card {
+    border-radius: 0.875rem;
+  }
+
+  .fade-up {
+    animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* Checkout — mesmo layout da base, nas cores da marca (botões azuis; verde só em "ok"). */
+.ck {
+  --ck-green: #0a84d0;
+  --ck-footer: #06162e;
+  --ck-ok: #13803c;
+  --ck-field: #f4f8ff;
+  --ck-blue: #0a84d0;
+  --ck-pix: #32bcad;
+  --ck-badge: #dcf3e2;
+  font-family: "DM Sans", system-ui, sans-serif;
+}
+.ck { --ck-bg: #ffffff; background: var(--ck-bg); }
+.ck h1, .ck h2, .ck h3 { font-family: inherit; letter-spacing: normal; }
+.ck .ck-surface { background: var(--ck-bg); }
+
+/* Painel /admin: tema próprio, neutro e com a fonte do sistema (não muda nada na loja). */
+@layer base {
+  .adm {
+    --background: #f4f5f7;
+    --foreground: #101828;
+    --card: #ffffff;
+    --card-foreground: #101828;
+    --popover: #ffffff;
+    --popover-foreground: #101828;
+    --primary: #101c3b;
+    --primary-foreground: #ffffff;
+    --secondary: #f2f4f7;
+    --secondary-foreground: #101828;
+    --muted: #f2f4f7;
+    --muted-foreground: #667085;
+    --accent: #f2f4f7;
+    --accent-foreground: #101828;
+    --border: #e4e7ec;
+    --input: #d0d5dd;
+    --ring: #1556e8;
+    --radius: 0.625rem;
+    /* Marca da loja nos detalhes do painel. */
+    --adm-brand: #101c3b;
+    --adm-brand-soft: #eaf0fd;
+    --adm-positive: #1556e8;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      sans-serif;
+    color: var(--foreground);
+    background: var(--background);
+  }
+  .adm h1,
+  .adm h2,
+  .adm h3 {
+    font-family: inherit;
+    letter-spacing: -0.015em;
+  }
+}

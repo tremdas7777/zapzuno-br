@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792116034068,
+      "tag": "0000_existing_funnel_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792116081843,
+      "tag": "0001_existing_site_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792116102795,
+      "tag": "0002_existing_rastreios",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792116138026,
+      "tag": "0003_existing_private_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792116155256,
+      "tag": "0004_existing_pix_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792116174177,
+      "tag": "0005_existing_pix_report_result",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /pedido/
+Disallow: /obrigado/
+Disallow: /pilhas/
+Disallow: /upsell/
+Disallow: /expresso/
+
+Sitemap: https://zapzuno-br.vercel.app/sitemap.xml
