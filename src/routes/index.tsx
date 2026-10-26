@@ -222,12 +222,12 @@ function Kits() {
                     </span>
                   )}
                   <img
-                    src="/produtos/kit-completo.webp"
+                    src="/fotos/kit-limpa.webp"
                     alt=""
-                    width={1200}
-                    height={1200}
+                    width={1254}
+                    height={1254}
                     loading="lazy"
-                    className="aspect-[4/3] w-full object-cover object-[50%_60%]"
+                    className="aspect-[4/3] w-full object-cover object-[50%_55%]"
                   />
                   <div className="flex flex-1 flex-col p-5">
                     <p className="font-display text-[34px] font-extrabold uppercase leading-none text-[var(--ink)]">
@@ -270,10 +270,10 @@ function Presente() {
     <section className="container-edge grid items-center gap-10 py-16 md:grid-cols-2 md:gap-16 md:py-24">
       <div className="relative overflow-hidden rounded-2xl shadow-[0_30px_60px_-30px_rgba(0,0,0,0.75)]">
         <img
-          src="/produtos/fliperama.webp"
+          src="/fotos/fliperama-limpa.webp"
           alt="Projetor mostrando tubarão, dino, pinguim e robô na parede, com as duas pistolas"
-          width={1200}
-          height={1200}
+          width={1254}
+          height={1254}
           loading="lazy"
           className="aspect-square w-full object-cover"
         />

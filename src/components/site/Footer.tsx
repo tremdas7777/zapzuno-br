@@ -99,9 +99,9 @@ export function Footer() {
               <Logo size="lg" />
             </Link>
             <p className="mt-4 text-[14px] leading-relaxed text-[var(--slate)]">
-              Menos tela.
+              Qualquer parede
               <br />
-              Mais jogo.
+              vira o alvo.
             </p>
             <div className="mt-5 space-y-1.5 text-[13.5px]">
               {whatsappEnabled && (

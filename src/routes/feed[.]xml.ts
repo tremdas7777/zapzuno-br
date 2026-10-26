@@ -45,7 +45,7 @@ function texts(b: Bundle, v: Variant) {
   const n = kitsOf(b, v);
   const variant = v.values.join(" / ");
   const title = [
-    `${b.name} ${brand.name}`,
+    b.name.includes(brand.name) ? b.name : `${b.name} ${brand.name}`,
     variant && ` - ${variant}`,
     n && ` (${n} ${n === 1 ? "projetor" : "projetores"} + ${n * 2} pistolas)`,
   ]
