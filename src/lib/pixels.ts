@@ -9,5 +9,5 @@
 export const PIXELS = {
   meta: "",
   tiktok: "",
-  utmify: "",
+  utmify: "6ae0522e0b7f72682803d3e3",
 } as const;
