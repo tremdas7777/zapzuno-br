@@ -8,4 +8,4 @@ Disallow: /pilhas/
 Disallow: /upsell/
 Disallow: /expresso/
 
-Sitemap: https://zapzuno-br.vercel.app/sitemap.xml
+Sitemap: https://zapzuno.shop/sitemap.xml
