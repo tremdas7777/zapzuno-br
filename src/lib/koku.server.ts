@@ -219,13 +219,36 @@ async function getCharge(key: string, id: string): Promise<any> {
  * Só "paid" é venda (a regra única de "pago" fica em pix-status.ts).
  */
 export async function kokuStatus(id: string): Promise<{ status: string; amount: number }> {
-  const charge = await getCharge(await requireKey(), id);
+  const key = await requireKey();
+  const charge = await getCharge(key, id);
   // Só status no log (sem dados pessoais). Pagamento depois de expirar abre análise na Koku.
   console.log("koku-status", id, charge?.status, charge?.late_payment ? "late_payment" : "");
+  await autoEnsureWebhook(key);
   return {
     status: String(charge?.status ?? "pending").toLowerCase(),
     amount: Math.round(Number(charge?.amount_cents ?? 0)),
   };
+}
+
+// A conta Koku pode atender várias lojas e cada aviso de pagamento só chega nos endereços cadastrados
+// nela: sem o desta loja, quem paga no app do banco e não volta para a tela do pedido fica pendente.
+// Por isso a loja confere (e cadastra) o próprio aviso sozinha, no máximo a cada 6 h por instância.
+const WEBHOOK_RECHECK_MS = 6 * 60 * 60 * 1000;
+let webhookCheckedAt = 0;
+
+async function autoEnsureWebhook(key: string): Promise<void> {
+  if (Date.now() - webhookCheckedAt < WEBHOOK_RECHECK_MS) return;
+  webhookCheckedAt = Date.now();
+  try {
+    const res = await fetch(`${KOKU_API}/api-keys/current`, { headers: authHeaders(key) });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- resposta do gateway sem tipo
+    const json = (await res.json().catch(() => null)) as any;
+    if (!res.ok) return;
+    const scopes: string[] = Array.isArray(json?.scopes) ? json.scopes.map(String) : [];
+    console.log("koku-webhook-check", await ensureWebhook(key, scopes));
+  } catch (e) {
+    console.error("koku-webhook-check failed", e instanceof Error ? e.message : e);
+  }
 }
 
 /**
