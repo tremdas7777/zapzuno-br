@@ -303,6 +303,8 @@ function responder(nome: string, dados: Record<string, unknown>): unknown {
     case "testHypercashFn":
     case "testRotasyncKeyFn":
       return { ok: true, status: 404 };
+    case "approveOrderFn":
+      return { approved: true, manual: false, gatewayStatus: "paid" };
     default:
       return { ok: true };
   }

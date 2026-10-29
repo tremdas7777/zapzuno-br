@@ -25,6 +25,7 @@ import {
   whatsappUrl,
 } from "@/lib/admin-format";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { ManualApprove } from "./ManualApprove";
 import {
   Avatar,
   EmptyState,
@@ -90,6 +91,8 @@ export function OrdersTab({ password }: OrdersTabProps) {
     try {
       const r = await fetchOrders({ data: { password, days } });
       setOrders(r.orders);
+      // Gaveta aberta acompanha o pedido atualizado (ex.: depois de aprovar).
+      setSelected((s) => (s ? (r.orders.find((x) => x.id === s.id) ?? s) : s));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar pedidos");
     } finally {
@@ -378,25 +381,48 @@ export function OrdersTab({ password }: OrdersTabProps) {
         )}
       </Panel>
 
-      <OrderSheet order={selected} onClose={() => setSelected(null)} />
+      <OrderSheet
+        order={selected}
+        onClose={() => setSelected(null)}
+        password={password}
+        onChanged={load}
+      />
     </div>
   );
 }
 
-function OrderSheet({ order: o, onClose }: { order: AdminOrder | null; onClose: () => void }) {
+function OrderSheet({
+  order: o,
+  onClose,
+  password,
+  onChanged,
+}: {
+  order: AdminOrder | null;
+  onClose: () => void;
+  password: string;
+  onChanged: () => void;
+}) {
   return (
     <Sheet open={!!o} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
         side="right"
         className="adm w-full overflow-y-auto border-l border-[#e4e7ec] bg-white p-0 sm:max-w-lg"
       >
-        {o && <OrderDetails o={o} />}
+        {o && <OrderDetails o={o} password={password} onChanged={onChanged} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function OrderDetails({ o }: { o: AdminOrder }) {
+function OrderDetails({
+  o,
+  password,
+  onChanged,
+}: {
+  o: AdminOrder;
+  password: string;
+  onChanged: () => void;
+}) {
   const c = o.customer ?? ({} as AdminOrder["customer"]);
   const utmEntries = Object.entries(o.utm ?? {}).filter(([, v]) => v);
   const { nome, variacao } = nomeEVariacao(o.bundle_name);
@@ -437,6 +463,7 @@ function OrderDetails({ o }: { o: AdminOrder }) {
       </div>
 
       <div className="space-y-6 px-6 py-5">
+        <ManualApprove order={o} password={password} onApproved={onChanged} />
         <div className="flex items-center gap-3 rounded-xl border border-[#eef0f3] bg-[#f9fafb] p-3">
           <ProductThumb id={o.bundle_id} className="h-14 w-14" />
           <div className="min-w-0">

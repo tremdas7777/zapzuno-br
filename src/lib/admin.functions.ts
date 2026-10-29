@@ -112,6 +112,8 @@ export type AdminOrder = {
     method?: "pix" | "card";
     installments?: number;
     card?: { brand?: string; lastDigits?: string };
+    /** Aprovado no /admin sem o gateway confirmar (comprovante do cliente). */
+    manualApproval?: { at: string; gatewayStatus: string | null };
     discount?: number;
   };
   bundle_id: string;
@@ -321,5 +323,61 @@ export const getAbandonedCheckouts = createServerFn({ method: "POST" })
       }
       rows.sort((a, b) => (a.lastAt < b.lastAt ? 1 : -1));
       return { funnel, rows: rows.slice(0, 1000) };
+    },
+  );
+
+/**
+ * Aprovar pagamento pelo /admin. Primeiro confere no gateway: se já foi pago, aprova como qualquer
+ * pagamento. Se não, só aprova com `forcar` (o cliente mandou o comprovante, o Pix caiu na conta) e o
+ * pedido fica marcado como aprovado manualmente. Aprovar segue o caminho do pagamento normal (loja,
+ * UTMify, Meta, RotaSync), uma vez só.
+ */
+export const approveOrderFn = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        password: z.string().min(1).max(200),
+        id: z.string().regex(/^[\w-]{1,80}$/),
+        forcar: z.boolean().default(false),
+      })
+      .parse(d),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<{ approved: boolean; manual: boolean; gatewayStatus: string | null }> => {
+      if (!senhaAdminOk(data.password)) throw new Error("Unauthorized");
+      const { getOrder, fetchGatewayStatus, reportPaidOnce, isPaidStatus } =
+        await import("@/lib/pix-orders.server");
+      const order = await getOrder(data.id);
+      if (!order) throw new Error("Pedido não encontrado.");
+      if ((order as { paid_reported_at?: string | null }).paid_reported_at) {
+        return { approved: true, manual: false, gatewayStatus: "paid" };
+      }
+      let gw: { status: string; amount: number } | null = null;
+      try {
+        gw = await fetchGatewayStatus(data.id);
+      } catch (e) {
+        console.error("approve gateway", data.id, e instanceof Error ? e.message : e);
+      }
+      if (gw && isPaidStatus(gw.status)) {
+        await reportPaidOnce(data.id, gw.amount);
+        return { approved: true, manual: false, gatewayStatus: gw.status };
+      }
+      if (!data.forcar) return { approved: false, manual: false, gatewayStatus: gw?.status ?? null };
+      const db = supabaseAdmin as unknown as { from: (t: string) => any };
+      const { error } = await db
+        .from("pix_orders")
+        .update({
+          customer: {
+            ...order.customer,
+            manualApproval: { at: new Date().toISOString(), gatewayStatus: gw?.status ?? null },
+          },
+        })
+        .eq("id", data.id);
+      if (error) throw new Error(error.message);
+      await reportPaidOnce(data.id, 0);
+      console.log("manual-approval", data.id, gw?.status ?? "gateway sem resposta");
+      return { approved: true, manual: true, gatewayStatus: gw?.status ?? null };
     },
   );
