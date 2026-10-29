@@ -15,6 +15,7 @@ const gameLinks: L[] = [
   { label: "Projetor Laser Tag", href: "/produto" },
   { label: "Como jogar", href: "/produto#como-jogar" },
   { label: "Veja em ação", href: "/produto#em-acao" },
+  { label: "Diário de Jogo", href: "/diario" },
 ];
 
 const helpLinks: L[] = [

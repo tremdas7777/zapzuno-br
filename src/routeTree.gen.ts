@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as ContatoRouteImport } from './routes/contato'
+import { Route as DiarioRouteImport } from './routes/diario'
 import { Route as FaqRouteImport } from './routes/faq'
 import { Route as FeedDotxmlRouteImport } from './routes/feed[.]xml'
 import { Route as PoliticaEnvioRouteImport } from './routes/politica-envio'
@@ -23,6 +24,7 @@ import { Route as RastreioRouteImport } from './routes/rastreio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SobreRouteImport } from './routes/sobre'
 import { Route as ColecaoIdRouteImport } from './routes/colecao.$id'
+import { Route as DiarioSlugRouteImport } from './routes/diario_.$slug'
 import { Route as ExpressoIdRouteImport } from './routes/expresso.$id'
 import { Route as ObrigadoIdRouteImport } from './routes/obrigado.$id'
 import { Route as PedidoIdRouteImport } from './routes/pedido.$id'
@@ -48,6 +50,11 @@ const CheckoutRoute = CheckoutRouteImport.update({
 const ContatoRoute = ContatoRouteImport.update({
   id: '/contato',
   path: '/contato',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiarioRoute = DiarioRouteImport.update({
+  id: '/diario',
+  path: '/diario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FaqRoute = FaqRouteImport.update({
@@ -100,6 +107,11 @@ const ColecaoIdRoute = ColecaoIdRouteImport.update({
   path: '/colecao/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DiarioSlugRoute = DiarioSlugRouteImport.update({
+  id: '/diario_/$slug',
+  path: '/diario/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExpressoIdRoute = ExpressoIdRouteImport.update({
   id: '/expresso/$id',
   path: '/expresso/$id',
@@ -136,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/checkout': typeof CheckoutRoute
   '/contato': typeof ContatoRoute
+  '/diario': typeof DiarioRoute
   '/faq': typeof FaqRoute
   '/feed.xml': typeof FeedDotxmlRoute
   '/politica-envio': typeof PoliticaEnvioRoute
@@ -146,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sobre': typeof SobreRoute
   '/colecao/$id': typeof ColecaoIdRoute
+  '/diario/$slug': typeof DiarioSlugRoute
   '/expresso/$id': typeof ExpressoIdRoute
   '/obrigado/$id': typeof ObrigadoIdRoute
   '/pedido/$id': typeof PedidoIdRoute
@@ -158,6 +172,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/checkout': typeof CheckoutRoute
   '/contato': typeof ContatoRoute
+  '/diario': typeof DiarioRoute
   '/faq': typeof FaqRoute
   '/feed.xml': typeof FeedDotxmlRoute
   '/politica-envio': typeof PoliticaEnvioRoute
@@ -168,6 +183,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sobre': typeof SobreRoute
   '/colecao/$id': typeof ColecaoIdRoute
+  '/diario/$slug': typeof DiarioSlugRoute
   '/expresso/$id': typeof ExpressoIdRoute
   '/obrigado/$id': typeof ObrigadoIdRoute
   '/pedido/$id': typeof PedidoIdRoute
@@ -181,6 +197,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/checkout': typeof CheckoutRoute
   '/contato': typeof ContatoRoute
+  '/diario': typeof DiarioRoute
   '/faq': typeof FaqRoute
   '/feed.xml': typeof FeedDotxmlRoute
   '/politica-envio': typeof PoliticaEnvioRoute
@@ -191,6 +208,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sobre': typeof SobreRoute
   '/colecao/$id': typeof ColecaoIdRoute
+  '/diario_/$slug': typeof DiarioSlugRoute
   '/expresso/$id': typeof ExpressoIdRoute
   '/obrigado/$id': typeof ObrigadoIdRoute
   '/pedido/$id': typeof PedidoIdRoute
@@ -205,6 +223,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/checkout'
     | '/contato'
+    | '/diario'
     | '/faq'
     | '/feed.xml'
     | '/politica-envio'
@@ -215,6 +234,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/sobre'
     | '/colecao/$id'
+    | '/diario/$slug'
     | '/expresso/$id'
     | '/obrigado/$id'
     | '/pedido/$id'
@@ -227,6 +247,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/checkout'
     | '/contato'
+    | '/diario'
     | '/faq'
     | '/feed.xml'
     | '/politica-envio'
@@ -237,6 +258,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/sobre'
     | '/colecao/$id'
+    | '/diario/$slug'
     | '/expresso/$id'
     | '/obrigado/$id'
     | '/pedido/$id'
@@ -249,6 +271,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/checkout'
     | '/contato'
+    | '/diario'
     | '/faq'
     | '/feed.xml'
     | '/politica-envio'
@@ -259,6 +282,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/sobre'
     | '/colecao/$id'
+    | '/diario_/$slug'
     | '/expresso/$id'
     | '/obrigado/$id'
     | '/pedido/$id'
@@ -272,6 +296,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   CheckoutRoute: typeof CheckoutRoute
   ContatoRoute: typeof ContatoRoute
+  DiarioRoute: typeof DiarioRoute
   FaqRoute: typeof FaqRoute
   FeedDotxmlRoute: typeof FeedDotxmlRoute
   PoliticaEnvioRoute: typeof PoliticaEnvioRoute
@@ -282,6 +307,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SobreRoute: typeof SobreRoute
   ColecaoIdRoute: typeof ColecaoIdRoute
+  DiarioSlugRoute: typeof DiarioSlugRoute
   ExpressoIdRoute: typeof ExpressoIdRoute
   ObrigadoIdRoute: typeof ObrigadoIdRoute
   PedidoIdRoute: typeof PedidoIdRoute
@@ -318,6 +344,13 @@ declare module '@tanstack/react-router' {
       path: '/contato'
       fullPath: '/contato'
       preLoaderRoute: typeof ContatoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diario': {
+      id: '/diario'
+      path: '/diario'
+      fullPath: '/diario'
+      preLoaderRoute: typeof DiarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/faq': {
@@ -390,6 +423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ColecaoIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/diario_/$slug': {
+      id: '/diario_/$slug'
+      path: '/diario/$slug'
+      fullPath: '/diario/$slug'
+      preLoaderRoute: typeof DiarioSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/expresso/$id': {
       id: '/expresso/$id'
       path: '/expresso/$id'
@@ -440,6 +480,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   CheckoutRoute: CheckoutRoute,
   ContatoRoute: ContatoRoute,
+  DiarioRoute: DiarioRoute,
   FaqRoute: FaqRoute,
   FeedDotxmlRoute: FeedDotxmlRoute,
   PoliticaEnvioRoute: PoliticaEnvioRoute,
@@ -450,6 +491,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SobreRoute: SobreRoute,
   ColecaoIdRoute: ColecaoIdRoute,
+  DiarioSlugRoute: DiarioSlugRoute,
   ExpressoIdRoute: ExpressoIdRoute,
   ObrigadoIdRoute: ObrigadoIdRoute,
   PedidoIdRoute: PedidoIdRoute,

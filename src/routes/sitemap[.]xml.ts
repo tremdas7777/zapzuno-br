@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
 import { getCategories, listedBundles } from "@/lib/bundles";
 import { ensureCatalog } from "@/lib/catalog.server";
+import { ARTIGOS } from "@/lib/artigos";
 import { absUrl, productPath } from "@/lib/seo";
 
 const esc = (s: string) =>
@@ -21,6 +22,8 @@ const entries = (): { path: string; images: readonly string[]; lastmod?: string 
     "/politica-privacidade",
     "/politica-reembolso",
   ].map((path) => ({ path, images: [] })),
+  { path: "/diario", images: [] },
+  ...ARTIGOS.map((a) => ({ path: `/diario/${a.slug}`, images: [a.img], lastmod: a.publicado })),
 ];
 
 export const Route = createFileRoute("/sitemap.xml")({

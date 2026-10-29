@@ -17,6 +17,7 @@ export const NAV = [
 const help = [
   { href: "/rastreio", label: "Rastrear pedido" },
   { href: "/faq", label: "Dúvidas frequentes" },
+  { href: "/diario", label: "Diário de Jogo" },
   { href: "/contato", label: "Contato" },
   { href: "/sobre", label: "Sobre a loja" },
 ];

@@ -119,7 +119,7 @@ export function TextLink({
   children,
   className,
 }: {
-  to: "/" | "/produto";
+  to: "/" | "/produto" | "/diario";
   hash?: string;
   children: ReactNode;
   className?: string;

@@ -35,7 +35,10 @@ export const Route = createFileRoute("/produto")({
     const p = getBundle(bundleIdFromSearch({ plano: loaderData?.plano ?? undefined }));
     return seo({
       path: productPath(p),
-      title: `${p.name}: qualquer parede vira o alvo | ${brand.name}`,
+      // O nome do produto já leva a marca: sem o "| ZAPZUNO" no fim para não repetir.
+      title: p.name.includes(brand.name)
+        ? `${p.name}: tiro ao alvo na parede com 2 pistolas`
+        : `${p.name}: qualquer parede vira o alvo | ${brand.name}`,
       description: `${p.name}: projetor de alvos + 2 pistolas de laser tag + 4 cartões (tubarão, dino, pinguim e robô). 1, 2 ou 3 kits a partir de ${brl(p.price)}. ${FREE_SHIPPING_LABEL}.`,
       image: p.img,
       imageAlt: p.name,

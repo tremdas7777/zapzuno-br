@@ -6,6 +6,7 @@ import { Display, Eyebrow, FaqList, FinalCta, LimeLink, TextLink, Ticker } from 
 import { Comparativo, EmAcao } from "@/components/br/KitSections";
 import { brand } from "@/lib/brand";
 import { brl, discountPct, FREE_SHIPPING_LABEL, getBundle, withVariantPrice } from "@/lib/bundles";
+import { ARTIGOS } from "@/lib/artigos";
 import { FAQ_HOME, KIT_HANDLE, KITS_PADRAO, kitsDe } from "@/lib/laser";
 import { seo, storeJsonLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
@@ -309,6 +310,39 @@ function Presente() {
   );
 }
 
+/** Links para os artigos do Diário de Jogo (/diario). */
+function Diario() {
+  return (
+    <section className="border-t border-[var(--line)]">
+      <div className="container-edge py-16 md:py-24">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <Eyebrow>Diário de Jogo</Eyebrow>
+            <Display top="Ideias para" em="a noite de jogo." className="mt-4 text-[48px] md:text-[68px]" />
+          </div>
+          <TextLink to="/diario" className="w-full max-w-[260px]">
+            Ver todos os guias
+          </TextLink>
+        </div>
+        <ul className="mt-10 grid gap-x-8 gap-y-3 border-t border-[var(--line)] pt-6 md:grid-cols-2">
+          {ARTIGOS.map((a) => (
+            <li key={a.slug}>
+              <Link
+                to="/diario/$slug"
+                params={{ slug: a.slug }}
+                className="flex items-start justify-between gap-3 text-[14.5px] font-semibold leading-snug text-[var(--ink)] hover:text-[var(--blue)]"
+              >
+                {a.title}
+                <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-[var(--blue)]" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 function Perguntas() {
   return (
     <section className="container-edge grid gap-10 py-16 md:grid-cols-[1fr_1.4fr] md:gap-16 md:py-24">
@@ -335,6 +369,7 @@ function Home() {
       <Presente />
       <Comparativo />
       <Perguntas />
+      <Diario />
       <FinalCta
         eyebrow="Luz apagada. Jogo ligado."
         top="Sua parede"
