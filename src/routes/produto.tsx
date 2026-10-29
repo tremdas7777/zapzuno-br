@@ -4,6 +4,7 @@ import { Check, ShieldCheck, Truck, Undo2 } from "lucide-react";
 import { SiteLayout } from "@/components/site/Layout";
 import { Gallery } from "@/components/br/Gallery";
 import { Display, Eyebrow, FaqList, FinalCta, Ticker } from "@/components/br/ui";
+import { Reviews } from "@/components/reviews/Reviews";
 import { Alvos, ComoJogar, Comparativo, EmAcao, JeitosDeJogar, ModosTiro, NaCaixa } from "@/components/br/KitSections";
 import { usePayInfo } from "@/hooks/usePayInfo";
 import { brand } from "@/lib/brand";
@@ -287,6 +288,7 @@ function Page() {
       <Comparativo />
       <ComoJogar />
       <NaCaixa />
+      <Reviews />
 
       <section id="perguntas" className="container-edge grid scroll-mt-28 gap-10 py-16 md:grid-cols-[1fr_1.4fr] md:gap-16 md:py-24">
         <div>

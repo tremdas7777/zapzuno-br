@@ -43,6 +43,7 @@ import {
 } from "@/components/checkout/parts";
 import { SummaryDesktop, SummaryMobile } from "@/components/checkout/Summary";
 import { OrderBump } from "@/components/checkout/OrderBump";
+import { Reviews } from "@/components/reviews/Reviews";
 import { FreeShippingProgress } from "@/components/checkout/FreeShippingProgress";
 import { ORDER_BUMPS, bumpsTotal, getBumps, type BumpId } from "@/lib/order-bump";
 import { cartItemName, cartLines } from "@/lib/cart";
@@ -871,6 +872,7 @@ function Page() {
           variant={variant}
         />
       </main>
+      <Reviews compact className="mt-auto" />
       <CheckoutFooter />
     </div>
   );
