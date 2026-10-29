@@ -4,6 +4,7 @@ import { ArrowLeftRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { fmtDateTime } from "@/lib/admin-format";
 import { Pill, SettingCard, SettingHeader } from "./kit";
 import {
   deleteKokuKeyFn,
@@ -33,6 +34,7 @@ type Status = {
   active: Gateway;
   configured: Record<Gateway, boolean>;
   keys: Record<Gateway, KeyInfo>;
+  lastFallback: { from: Gateway; to: Gateway; reason: string; at: string } | null;
 };
 
 const LABEL: Record<Gateway, string> = {
@@ -142,7 +144,7 @@ export function PixGatewayCard({ password }: { password: string }) {
       <SettingHeader
         icon={<ArrowLeftRight />}
         title="Gateway do Pix"
-        description="Quem gera os próximos Pix. A troca vale na hora; pedidos já gerados continuam sendo confirmados pelo gateway em que foram criados."
+        description="Quem gera os próximos Pix. A troca vale na hora; pedidos já gerados continuam sendo confirmados pelo gateway em que foram criados. Se o gateway em uso falhar, o Pix sai sozinho pelo próximo que tiver chave."
         status={status ? <Pill tone="green">Em uso: {LABEL[status.active]}</Pill> : null}
       />
 
@@ -184,6 +186,8 @@ export function PixGatewayCard({ password }: { password: string }) {
         </p>
       )}
 
+      {status?.lastFallback && <LastFallback f={status.lastFallback} />}
+
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#98a2b3]">
           Chaves de API
@@ -205,6 +209,25 @@ export function PixGatewayCard({ password }: { password: string }) {
       </div>
       {msg && <p className="rounded-lg bg-[#f2f4f7] px-3 py-2 text-xs text-[#344054]">{msg}</p>}
     </SettingCard>
+  );
+}
+
+/** Última vez que o Pix saiu pelo gateway reserva. Destaque nas primeiras 24 h. */
+function LastFallback({ f }: { f: NonNullable<Status["lastFallback"]> }) {
+  const recente = Date.now() - new Date(f.at).getTime() < 86_400_000;
+  return (
+    <p
+      className={cn(
+        "rounded-lg border px-3 py-2 text-xs",
+        recente
+          ? "border-[#fedf89] bg-[#fffaeb] text-[#b54708]"
+          : "border-[#e4e7ec] bg-[#f9fafb] text-[#475467]",
+      )}
+    >
+      Última troca automática: {LABEL[f.from]} → {LABEL[f.to]} em {fmtDateTime(f.at)}.
+      {f.reason && ` Motivo: ${f.reason}`}
+      {recente && ` Teste a chave da ${LABEL[f.from]} ou troque o gateway acima.`}
+    </p>
   );
 }
 

@@ -256,6 +256,12 @@ function responder(nome: string, dados: Record<string, unknown>): unknown {
           payshark: chave("ps_demo_9012ijkl"),
           koku: chave("koku_live_demo_3456mnop"),
         },
+        lastFallback: {
+          from: "umbrella",
+          to: "koku",
+          reason: "Não foi possível gerar o Pix. Confira seus dados e tente novamente.",
+          at: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+        },
       };
     case "getHypercashStatus":
       return { secret: null, public: null };

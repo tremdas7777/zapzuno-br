@@ -1,6 +1,8 @@
 // Gateway Pix PayShark. Somente servidor. Docs (só logado): https://app.gatewaypayshark.com.br/docs
 // Chave (Bearer, "credencial padrão" do painel → Financeiro → Integrações) cadastrada no /admin
 // (private_settings, só service role). O secret PAYSHARK_API_KEY do Lovable serve de reserva.
+import { PayerDataError } from "@/lib/pix-errors";
+
 export const PAYSHARK_API = "https://api.gatewaypayshark.com.br/v1";
 
 const KEY = "payshark_api_key";
@@ -112,7 +114,7 @@ export async function paysharkCashin(o: {
     | undefined;
 }): Promise<{ id: string; qrcode: string; status: string }> {
   const a = o.address;
-  if (!a) throw new Error("Confira o CEP e o endereço de entrega.");
+  if (!a) throw new PayerDataError("Confira o CEP e o endereço de entrega.");
   const res = await fetch(`${PAYSHARK_API}/payment`, {
     method: "POST",
     headers: await headers(),
@@ -164,16 +166,15 @@ export async function paysharkCashin(o: {
     console.error("PayShark error", res.status, JSON.stringify(json)?.slice(0, 1500));
     // Mostra o motivo que a PayShark devolveu (sem dados pessoais) para facilitar o ajuste.
     // "details" diz qual campo foi recusado (ex.: { payer: { phone: "..." } }).
-    const reason = [
-      json?.message,
-      ...flatDetails(json?.details),
-      ...[json?.error, json?.errors].flat(),
-    ]
+    const details = flatDetails(json?.details);
+    const reason = [json?.message, ...details, ...[json?.error, json?.errors].flat()]
       .filter((x) => typeof x === "string" && x.trim())
       .join("; ");
-    throw new Error(
-      `Não foi possível gerar o Pix (PayShark ${res.status}${reason ? `: ${reason.slice(0, 400)}` : ""}).`,
-    );
+    const message = `Não foi possível gerar o Pix (PayShark ${res.status}${reason ? `: ${reason.slice(0, 400)}` : ""}).`;
+    // Campo do cliente recusado (payer.* ou delivery.*): o gateway reserva recusaria o mesmo dado.
+    const payerField = details.some((d) => /^(payer|delivery)\./.test(d));
+    if (res.status >= 400 && res.status < 500 && payerField) throw new PayerDataError(message);
+    throw new Error(message);
   }
   console.log("payshark-create", txId, tx?.status);
   return {

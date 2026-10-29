@@ -1,7 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { senhaAdminOk } from "@/lib/admin-guard.server";
 import { z } from "zod";
-import { getPixGatewayState, PIX_GATEWAYS, savePixGateway } from "./pix-gateway.server";
+import {
+  getLastPixFallback,
+  getPixGatewayState,
+  PIX_GATEWAYS,
+  savePixGateway,
+} from "./pix-gateway.server";
 import {
   deletePixgateKey,
   getPixgateKeySource,
@@ -39,21 +44,26 @@ function mask(token: string): string {
   return `${token.slice(0, 4)}••••${token.slice(-4)}`;
 }
 
-/** Gateway escolhido, gateway em uso e chaves de cada gateway do Pix (mascaradas). */
+/**
+ * Gateway escolhido, gateway em uso, chaves de cada gateway do Pix (mascaradas) e a última troca
+ * automática para o gateway reserva.
+ */
 export const getPixGatewayStatus = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => pw.parse(d))
   .handler(async ({ data }) => {
     assertAdmin(data.password);
-    const [state, pixgate, umbrella, sagacepay, payshark, koku] = await Promise.all([
+    const [state, pixgate, umbrella, sagacepay, payshark, koku, lastFallback] = await Promise.all([
       getPixGatewayState(),
       getPixgateKeySource(),
       getUmbrellaKeySource(),
       getSagacePayKeySource(),
       getPaySharkKeySource(),
       getKokuKeySource(),
+      getLastPixFallback().catch(() => null),
     ]);
     return {
       ...state,
+      lastFallback,
       keys: {
         pixgate: { key: pixgate.key ? mask(pixgate.key) : null, source: pixgate.source },
         umbrella: { key: umbrella.key ? mask(umbrella.key) : null, source: umbrella.source },

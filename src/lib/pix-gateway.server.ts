@@ -1,8 +1,11 @@
 // Gateway do Pix escolhido no /admin: PixGate (padrão), Umbrella, SagacePay, PayShark ou Koku. Somente servidor.
 // A escolha vale para os próximos Pix. Cada pedido guarda no id qual gateway gerou o Pix, então a
 // consulta de status e o webhook continuam no gateway certo mesmo depois de uma troca.
+// Se o gateway ativo falhar (conta desligada, chave recusada, fora do ar), o Pix sai pelo próximo
+// gateway com chave, sem esperar alguém trocar no /admin.
 import { getPixgateKey, PIXGATE_API } from "@/lib/pixgate.server";
 import { brand } from "@/lib/brand";
+import { PayerDataError } from "@/lib/pix-errors";
 import {
   createUmbrellaPix,
   getUmbrellaKey,
@@ -110,8 +113,7 @@ export async function savePixGateway(gateway: PixGateway): Promise<void> {
 
 export type PixCustomer = { name: string; email: string; phone: string; cpf: string };
 
-/** Gera a cobrança Pix no gateway ativo. Valor em centavos. O id devolvido já vem com o prefixo. */
-export async function createPix(o: {
+type PixInput = {
   amount: number;
   customer: PixCustomer;
   address?: UmbrellaAddress | undefined;
@@ -119,11 +121,81 @@ export async function createPix(o: {
   description: string;
   origin: string;
   ip?: string | null | undefined;
-}): Promise<{ id: string; qrcode: string; status: string }> {
-  const { active } = await getPixGatewayState();
+};
+type PixCharge = { id: string; qrcode: string; status: string };
+
+/** Última vez que o Pix saiu pelo gateway reserva porque o ativo falhou (aparece no /admin). */
+export type PixFallback = { from: PixGateway; to: PixGateway; reason: string; at: string };
+const FALLBACK_SETTING = "pix_gateway_fallback";
+
+/**
+ * Gera a cobrança Pix no gateway ativo. Valor em centavos. O id devolvido já vem com o prefixo.
+ * Se o ativo falhar por motivo do gateway, tenta uma vez o próximo com chave (ordem de PIX_GATEWAYS).
+ * Dado do cliente recusado (PayerDataError) não troca de gateway: o reserva recusaria igual.
+ */
+export async function createPix(o: PixInput): Promise<PixCharge> {
+  const { active, configured: keys } = await getPixGatewayState();
+  try {
+    return await chargeWith(active, o);
+  } catch (e) {
+    if (e instanceof PayerDataError) throw e;
+    // A PayShark exige endereço: sem ele, ela não serve de reserva.
+    const next = PIX_GATEWAYS.find(
+      (g) => g !== active && keys[g] && (g !== "payshark" || !!o.address),
+    );
+    if (!next) throw e;
+    const reason = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+    // Só gateway e motivo no log (sem dados pessoais).
+    console.warn(`pix-fallback ${active} -> ${next} ${reason}`);
+    let charge: PixCharge;
+    try {
+      charge = await chargeWith(next, o);
+    } catch (e2) {
+      console.error(`pix-fallback-failed ${next}`, e2 instanceof Error ? e2.message : e2);
+      // Se o reserva apontou o dado errado do cliente, essa mensagem ajuda mais que a do ativo.
+      throw e2 instanceof PayerDataError ? e2 : e;
+    }
+    await saveFallback({ from: active, to: next, reason, at: new Date().toISOString() });
+    return charge;
+  }
+}
+
+async function saveFallback(f: PixFallback): Promise<void> {
+  try {
+    const { error } = await (
+      await db()
+    )
+      .from("private_settings")
+      .upsert({ key: FALLBACK_SETTING, value: JSON.stringify(f), updated_at: f.at });
+    if (error) console.error("pix-fallback-save", error.message);
+  } catch (e) {
+    console.error("pix-fallback-save", e instanceof Error ? e.message : e);
+  }
+}
+
+/** Última troca automática de gateway (null = nunca houve). */
+export async function getLastPixFallback(): Promise<PixFallback | null> {
+  const { data } = await (
+    await db()
+  )
+    .from("private_settings")
+    .select("value")
+    .eq("key", FALLBACK_SETTING)
+    .maybeSingle();
+  try {
+    const f = JSON.parse(String(data?.value ?? ""));
+    if (!isGateway(f?.from) || !isGateway(f?.to) || typeof f?.at !== "string") return null;
+    return { from: f.from, to: f.to, reason: String(f.reason ?? ""), at: f.at };
+  } catch {
+    return null;
+  }
+}
+
+/** Gera a cobrança num gateway específico. O id devolvido já vem com o prefixo do gateway. */
+async function chargeWith(gateway: PixGateway, o: PixInput): Promise<PixCharge> {
   // Sempre o domínio oficial: o navegador não escolhe para onde o gateway manda os avisos.
   const webhook = `${brand.siteUrl}/api/public/pix-webhook`;
-  if (active === "umbrella") {
+  if (gateway === "umbrella") {
     const tx = await createUmbrellaPix({
       amount: o.amount,
       customer: o.customer,
@@ -134,7 +206,7 @@ export async function createPix(o: {
     });
     return { ...tx, id: `${UMBRELLA_ORDER_PREFIX}${tx.id}` };
   }
-  if (active === "sagacepay") {
+  if (gateway === "sagacepay") {
     const tx = await sagaceCashin({
       amountCents: o.amount,
       customer: o.customer,
@@ -145,7 +217,7 @@ export async function createPix(o: {
     });
     return { ...tx, id: `${SAGACEPAY_ORDER_PREFIX}${tx.id}` };
   }
-  if (active === "payshark") {
+  if (gateway === "payshark") {
     const tx = await paysharkCashin({
       amountCents: o.amount,
       customer: o.customer,
@@ -157,7 +229,7 @@ export async function createPix(o: {
     });
     return { ...tx, id: `${PAYSHARK_ORDER_PREFIX}${tx.id}` };
   }
-  if (active === "koku") {
+  if (gateway === "koku") {
     // Sem postback por cobrança: o webhook da Koku é cadastrado na conta (Testar no /admin cadastra).
     const tx = await kokuCashin({
       amountCents: o.amount,

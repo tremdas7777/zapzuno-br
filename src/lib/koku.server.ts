@@ -4,6 +4,7 @@
 // charges:write, charges:read, webhooks:read e webhooks:write. Cadastrada no /admin
 // (private_settings, só service role). O secret KOKU_API_KEY serve de reserva.
 import { brand } from "@/lib/brand";
+import { PayerDataError } from "@/lib/pix-errors";
 
 export const KOKU_API = "https://api.kokupay.com/v1";
 
@@ -173,9 +174,9 @@ export async function kokuCashin(o: {
 
   if (!res || !res.ok) {
     console.error("Koku error", res?.status, errorSummary(json));
-    throw new Error(
-      payerMessage(json) ?? "Não foi possível gerar o Pix. Confira seus dados e tente novamente.",
-    );
+    const payer = payerMessage(json);
+    if (payer) throw new PayerDataError(payer);
+    throw new Error("Não foi possível gerar o Pix. Confira seus dados e tente novamente.");
   }
 
   let charge = json;
