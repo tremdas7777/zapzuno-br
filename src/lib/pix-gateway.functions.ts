@@ -26,6 +26,7 @@ import {
   savePaySharkKey,
   testPaySharkKey,
 } from "./payshark.server";
+import { deleteKokuKey, getKokuKeySource, saveKokuKey, testKokuKey } from "./koku.server";
 
 const pw = z.object({ password: z.string().min(1).max(200) });
 
@@ -43,12 +44,13 @@ export const getPixGatewayStatus = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => pw.parse(d))
   .handler(async ({ data }) => {
     assertAdmin(data.password);
-    const [state, pixgate, umbrella, sagacepay, payshark] = await Promise.all([
+    const [state, pixgate, umbrella, sagacepay, payshark, koku] = await Promise.all([
       getPixGatewayState(),
       getPixgateKeySource(),
       getUmbrellaKeySource(),
       getSagacePayKeySource(),
       getPaySharkKeySource(),
+      getKokuKeySource(),
     ]);
     return {
       ...state,
@@ -57,6 +59,7 @@ export const getPixGatewayStatus = createServerFn({ method: "POST" })
         umbrella: { key: umbrella.key ? mask(umbrella.key) : null, source: umbrella.source },
         sagacepay: { key: sagacepay.key ? mask(sagacepay.key) : null, source: sagacepay.source },
         payshark: { key: payshark.key ? mask(payshark.key) : null, source: payshark.source },
+        koku: { key: koku.key ? mask(koku.key) : null, source: koku.source },
       },
     };
   });
@@ -163,4 +166,28 @@ export const testPaySharkFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertAdmin(data.password);
     return testPaySharkKey();
+  });
+
+export const saveKokuKeyFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => pw.extend({ key: z.string().trim().min(10).max(500) }).parse(d))
+  .handler(async ({ data }) => {
+    assertAdmin(data.password);
+    await saveKokuKey(data.key);
+    return { ok: true };
+  });
+
+export const deleteKokuKeyFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => pw.parse(d))
+  .handler(async ({ data }) => {
+    assertAdmin(data.password);
+    await deleteKokuKey();
+    return { ok: true };
+  });
+
+/** Valida a chave da Koku sem gerar cobrança e cadastra o webhook da loja na Koku se faltar. */
+export const testKokuFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => pw.parse(d))
+  .handler(async ({ data }) => {
+    assertAdmin(data.password);
+    return testKokuKey();
   });

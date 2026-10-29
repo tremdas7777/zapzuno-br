@@ -248,12 +248,13 @@ function responder(nome: string, dados: Record<string, unknown>): unknown {
       return {
         selected: "pixgate",
         active: "pixgate",
-        configured: { pixgate: true, umbrella: true, sagacepay: false, payshark: true },
+        configured: { pixgate: true, umbrella: true, sagacepay: false, payshark: true, koku: true },
         keys: {
           pixgate: chave("pg_demo_1234abcd"),
           umbrella: chave("um_demo_5678efgh"),
           sagacepay: { key: null, source: null },
           payshark: chave("ps_demo_9012ijkl"),
+          koku: chave("koku_live_demo_3456mnop"),
         },
       };
     case "getHypercashStatus":
@@ -291,6 +292,7 @@ function responder(nome: string, dados: Record<string, unknown>): unknown {
     case "testPixgateFn":
     case "testUmbrellaFn":
     case "testPaySharkFn":
+    case "testKokuFn":
     case "testSagacePayFn":
     case "testHypercashFn":
     case "testRotasyncKeyFn":

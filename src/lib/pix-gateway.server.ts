@@ -1,4 +1,4 @@
-// Gateway do Pix escolhido no /admin: PixGate (padrão), Umbrella, SagacePay ou PayShark. Somente servidor.
+// Gateway do Pix escolhido no /admin: PixGate (padrão), Umbrella, SagacePay, PayShark ou Koku. Somente servidor.
 // A escolha vale para os próximos Pix. Cada pedido guarda no id qual gateway gerou o Pix, então a
 // consulta de status e o webhook continuam no gateway certo mesmo depois de uma troca.
 import { getPixgateKey, PIXGATE_API } from "@/lib/pixgate.server";
@@ -11,14 +11,16 @@ import {
 } from "@/lib/umbrella.server";
 import { getSagacePayKey, sagaceCashin, sagaceStatus } from "@/lib/sagacepay.server";
 import { getPaySharkKey, paysharkCashin, paysharkStatus } from "@/lib/payshark.server";
+import { getKokuKey, kokuCashin, kokuStatus } from "@/lib/koku.server";
 
-export const PIX_GATEWAYS = ["pixgate", "umbrella", "sagacepay", "payshark"] as const;
+export const PIX_GATEWAYS = ["pixgate", "umbrella", "sagacepay", "payshark", "koku"] as const;
 export type PixGateway = (typeof PIX_GATEWAYS)[number];
 export const PIX_GATEWAY_LABEL: Record<PixGateway, string> = {
   umbrella: "Umbrella",
   pixgate: "PixGate",
   sagacepay: "SagacePay",
   payshark: "PayShark",
+  koku: "Koku",
 };
 
 /** Pedidos Pix da Umbrella são guardados com este prefixo (os da PixGate ficam sem prefixo). */
@@ -30,8 +32,11 @@ export const isSagacePayOrderId = (id: string) => id.startsWith(SAGACEPAY_ORDER_
 /** Pedidos Pix da PayShark são guardados com este prefixo. */
 export const PAYSHARK_ORDER_PREFIX = "ps_";
 export const isPaySharkOrderId = (id: string) => id.startsWith(PAYSHARK_ORDER_PREFIX);
+/** Pedidos Pix da Koku são guardados com este prefixo. */
+export const KOKU_ORDER_PREFIX = "ko_";
+export const isKokuOrderId = (id: string) => id.startsWith(KOKU_ORDER_PREFIX);
 
-/** O Pix da SagacePay expira em 30 minutos (mesmo prazo mostrado no checkout). */
+/** O Pix da SagacePay e da Koku expira em 30 minutos (mesmo prazo mostrado no checkout). */
 const PIX_EXPIRES_IN_SECONDS = 30 * 60;
 
 const SETTING = "pix_gateway";
@@ -58,13 +63,20 @@ async function savedChoice(): Promise<PixGateway | null> {
 
 /** Quais gateways têm chave cadastrada (painel ou secret do Lovable). */
 async function configured(): Promise<Record<PixGateway, boolean>> {
-  const [umbrella, pixgate, sagacepay, payshark] = await Promise.all([
+  const [umbrella, pixgate, sagacepay, payshark, koku] = await Promise.all([
     getUmbrellaKey().catch(() => null),
     getPixgateKey().catch(() => null),
     getSagacePayKey().catch(() => null),
     getPaySharkKey().catch(() => null),
+    getKokuKey().catch(() => null),
   ]);
-  return { umbrella: !!umbrella, pixgate: !!pixgate, sagacepay: !!sagacepay, payshark: !!payshark };
+  return {
+    umbrella: !!umbrella,
+    pixgate: !!pixgate,
+    sagacepay: !!sagacepay,
+    payshark: !!payshark,
+    koku: !!koku,
+  };
 }
 
 /**
@@ -145,6 +157,17 @@ export async function createPix(o: {
     });
     return { ...tx, id: `${PAYSHARK_ORDER_PREFIX}${tx.id}` };
   }
+  if (active === "koku") {
+    // Sem postback por cobrança: o webhook da Koku é cadastrado na conta (Testar no /admin cadastra).
+    const tx = await kokuCashin({
+      amountCents: o.amount,
+      customer: o.customer,
+      description: o.description,
+      orderReference: crypto.randomUUID(),
+      expiresInSeconds: PIX_EXPIRES_IN_SECONDS,
+    });
+    return { ...tx, id: `${KOKU_ORDER_PREFIX}${tx.id}` };
+  }
   return pixgateCashin({ ...o, postback: webhook });
 }
 
@@ -156,6 +179,7 @@ export async function fetchPixStatus(id: string): Promise<{ status: string; amou
   }
   if (isSagacePayOrderId(id)) return sagaceStatus(id.slice(SAGACEPAY_ORDER_PREFIX.length));
   if (isPaySharkOrderId(id)) return paysharkStatus(id.slice(PAYSHARK_ORDER_PREFIX.length));
+  if (isKokuOrderId(id)) return kokuStatus(id.slice(KOKU_ORDER_PREFIX.length));
   return pixgateStatus(id);
 }
 
