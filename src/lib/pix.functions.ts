@@ -21,6 +21,7 @@ import {
   reportPendingToUtmify,
   getOrder,
   findUpsellOf,
+  reconcilePendingPix,
 } from "@/lib/pix-orders.server";
 import { createCardTransaction, CARD_ORDER_PREFIX, getHypercashKeys } from "@/lib/hypercash.server";
 import { createPix } from "@/lib/pix-gateway.server";
@@ -583,5 +584,7 @@ export const getPixStatus = createServerFn({ method: "GET" })
         ua: h?.get("user-agent") ?? null,
       });
     }
+    // A tela do Pix também dispara a conferência dos outros pendentes (no máximo 1 rodada a cada 50 s).
+    await reconcilePendingPix().catch((e) => console.error("pix-reconcile failed", e));
     return { status, paid };
   });

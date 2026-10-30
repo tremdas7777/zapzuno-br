@@ -518,54 +518,97 @@ export async function enviarPendentesRotasync(
   return out;
 }
 
-/** Status da Koku e da Pix Black que encerram a cobrança, gravados com o nome que o /admin já mostra. */
+/** Status de cobrança encerrada, gravados com o nome que o /admin já mostra. */
 const KOKU_FINAL: Record<string, string> = {
   expired: "expired",
   cancelled: "expired",
   canceled: "expired",
   failed: "refused",
+  refused: "refused",
   refunded: "refunded",
 };
 let lastKokuReconcile = 0;
+const RECONCILE_KEY = "pix_reconcile_at";
+const RECONCILE_EVERY_MS = 50_000;
 
 /**
- * Pedidos Koku e Pix Black ainda pendentes das últimas 72 h: consulta no gateway e reporta os pagos
- * (loja, UTMify e RotaSync). Cobre quem pagou no app do banco e não voltou para a tela do pedido
- * enquanto o aviso de pagamento da loja não estava cadastrado no gateway. Roda quando o /admin carrega
- * os pedidos, no máximo 1 vez por minuto por instância; cobrança encerrada sai da lista.
+ * Trava da conferência para a loja toda (várias instâncias, /admin, agendamento e tela do Pix):
+ * no máximo 1 rodada a cada 50 s. Sem a trava do banco, vale a da instância.
  */
-export async function reconcilePendingPix(): Promise<{ checked: number; paid: number }> {
-  if (Date.now() - lastKokuReconcile < 60_000) return { checked: 0, paid: 0 };
+async function claimReconcile(): Promise<boolean> {
+  if (Date.now() - lastKokuReconcile < RECONCILE_EVERY_MS) return false;
   lastKokuReconcile = Date.now();
   const db = await admin();
-  const { data, error } = await db
-    .from("pix_orders")
-    .select("id")
-    .or("id.like.ko_%,id.like.pb_%")
-    .is("paid_reported_at", null)
-    .not("status", "in", "(paid,expired,refused,refunded)")
-    .gte("created_at", new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString())
-    .order("created_at", { ascending: false })
-    .limit(40);
-  if (error) {
-    console.error("pix-reconcile query", error.message);
+  const now = new Date().toISOString();
+  try {
+    const { data, error } = await db
+      .from("private_settings")
+      .update({ value: now, updated_at: now })
+      .eq("key", RECONCILE_KEY)
+      .lt("value", new Date(Date.now() - RECONCILE_EVERY_MS).toISOString())
+      .select("key");
+    if (error) throw new Error(error.message);
+    if (data?.length) return true;
+    // Primeira rodada da loja cria a linha; se ela já existe, outra instância acabou de conferir.
+    const { error: insertError } = await db
+      .from("private_settings")
+      .insert({ key: RECONCILE_KEY, value: now, updated_at: now });
+    return !insertError;
+  } catch (e) {
+    console.error("pix-reconcile trava", e instanceof Error ? e.message : e);
+    return true;
+  }
+}
+
+/**
+ * Pix não pago: consulta no gateway e reporta os pagos (loja, UTMify e RotaSync). Cobre quem pagou no
+ * app do banco e não voltou para a tela do pedido quando o aviso de pagamento do gateway não chega.
+ * - Pendentes das últimas 2 h: toda rodada. Pendentes de 2 h a 72 h: a cada 10 minutos.
+ * - "Expirados" das últimas 24 h também: a Pix Black já respondeu "expired" e minutos depois "paid"
+ *   (30/10, pedido pb_f8063ee4 da Beam), e antes disso o pedido ficava expirado para sempre.
+ * Roda pelo /admin, pela tela do Pix e pelo agendamento (/api/public/pix-reconcile, a cada minuto).
+ */
+export async function reconcilePendingPix(): Promise<{ checked: number; paid: number }> {
+  if (!(await claimReconcile())) return { checked: 0, paid: 0 };
+  const db = await admin();
+  const since = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const lote = (q: ReturnType<typeof db.from>) =>
+    q.is("paid_reported_at", null).not("id", "like", "hc_%").order("created_at", { ascending: false });
+  const antigos = new Date().getUTCMinutes() % 10 === 0;
+  const consultas = await Promise.all([
+    lote(db.from("pix_orders").select("id"))
+      .not("status", "in", "(paid,expired,refused,refunded)")
+      .gte("created_at", since(antigos ? 72 : 2))
+      .limit(antigos ? 150 : 60),
+    lote(db.from("pix_orders").select("id"))
+      .eq("status", "expired")
+      .gte("created_at", since(antigos ? 24 : 2))
+      .limit(antigos ? 100 : 40),
+  ]);
+  const erro = consultas.find((r) => r.error)?.error;
+  if (erro) {
+    console.error("pix-reconcile query", erro.message);
     return { checked: 0, paid: 0 };
   }
-  const ids = ((data ?? []) as { id: string }[]).map((o) => o.id).filter((id) => id.startsWith("ko_") || id.startsWith("pb_"));
+  const ids = [
+    ...new Set(consultas.flatMap((r) => ((r.data ?? []) as { id: string }[]).map((o) => o.id))),
+  ];
   let paid = 0;
-  for (let i = 0; i < ids.length; i += 5) {
+  for (let i = 0; i < ids.length; i += 8) {
     await Promise.all(
-      ids.slice(i, i + 5).map(async (id) => {
+      ids.slice(i, i + 8).map(async (id) => {
         try {
           const { status, amount } = await fetchGatewayStatus(id);
+          const final = KOKU_FINAL[String(status).toLowerCase()];
           if (isPaidStatus(status)) {
             await reportPaidOnce(id, amount);
             paid++;
-          } else if (KOKU_FINAL[status]) {
+          } else if (final) {
             await db
               .from("pix_orders")
-              .update({ status: KOKU_FINAL[status], updated_at: new Date().toISOString() })
+              .update({ status: final, updated_at: new Date().toISOString() })
               .eq("id", id)
+              .neq("status", final)
               .is("paid_reported_at", null);
           }
         } catch (e) {
@@ -574,6 +617,6 @@ export async function reconcilePendingPix(): Promise<{ checked: number; paid: nu
       }),
     );
   }
-  console.log("pix-reconcile", ids.length, "conferidos,", paid, "pagos");
+  console.log("pix-reconcile", ids.length, "conferidos,", paid, "pagos", antigos ? "(com antigos)" : "");
   return { checked: ids.length, paid };
 }
