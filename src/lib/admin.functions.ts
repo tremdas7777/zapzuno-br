@@ -144,9 +144,9 @@ export const getAdminOrders = createServerFn({ method: "POST" })
     if (!senhaAdminOk(data.password)) {
       throw new Error("Unauthorized");
     }
-    // Pedidos Koku pagos que ficaram pendentes (cliente não voltou para a tela) viram pagos aqui.
-    const { reconcileKokuPending } = await import("@/lib/pix-orders.server");
-    await reconcileKokuPending().catch((e) => console.error("koku-reconcile failed", e));
+    // Pedidos Koku/Pix Black pagos que ficaram pendentes (cliente não voltou para a tela) viram pagos aqui.
+    const { reconcilePendingPix } = await import("@/lib/pix-orders.server");
+    await reconcilePendingPix().catch((e) => console.error("pix-reconcile failed", e));
     const since = periodStart(data.days);
     // Tabela pix_orders ainda não presente nos tipos gerados.
     const db = supabaseAdmin as unknown as { from: (t: string) => any };

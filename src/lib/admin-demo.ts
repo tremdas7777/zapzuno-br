@@ -248,13 +248,21 @@ function responder(nome: string, dados: Record<string, unknown>): unknown {
       return {
         selected: "pixgate",
         active: "pixgate",
-        configured: { pixgate: true, umbrella: true, sagacepay: false, payshark: true, koku: true },
+        configured: {
+          pixgate: true,
+          umbrella: true,
+          sagacepay: false,
+          payshark: true,
+          koku: true,
+          pixblack: true,
+        },
         keys: {
           pixgate: chave("pg_demo_1234abcd"),
           umbrella: chave("um_demo_5678efgh"),
           sagacepay: { key: null, source: null },
           payshark: chave("ps_demo_9012ijkl"),
           koku: chave("koku_live_demo_3456mnop"),
+          pixblack: chave("pxb_live_demo_7890qrst"),
         },
         lastFallback: {
           from: "umbrella",
@@ -299,6 +307,7 @@ function responder(nome: string, dados: Record<string, unknown>): unknown {
     case "testUmbrellaFn":
     case "testPaySharkFn":
     case "testKokuFn":
+    case "testPixBlackFn":
     case "testSagacePayFn":
     case "testHypercashFn":
     case "testRotasyncKeyFn":

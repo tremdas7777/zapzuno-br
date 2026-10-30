@@ -518,39 +518,40 @@ export async function enviarPendentesRotasync(
   return out;
 }
 
-/** Status da Koku que encerram a cobrança, gravados com o nome que o /admin já mostra. */
+/** Status da Koku e da Pix Black que encerram a cobrança, gravados com o nome que o /admin já mostra. */
 const KOKU_FINAL: Record<string, string> = {
   expired: "expired",
   cancelled: "expired",
+  canceled: "expired",
   failed: "refused",
   refunded: "refunded",
 };
 let lastKokuReconcile = 0;
 
 /**
- * Pedidos Koku ainda pendentes das últimas 72 h: consulta na Koku e reporta os que já foram pagos
+ * Pedidos Koku e Pix Black ainda pendentes das últimas 72 h: consulta no gateway e reporta os pagos
  * (loja, UTMify e RotaSync). Cobre quem pagou no app do banco e não voltou para a tela do pedido
- * enquanto o aviso de pagamento da loja não estava cadastrado na Koku. Roda quando o /admin carrega
+ * enquanto o aviso de pagamento da loja não estava cadastrado no gateway. Roda quando o /admin carrega
  * os pedidos, no máximo 1 vez por minuto por instância; cobrança encerrada sai da lista.
  */
-export async function reconcileKokuPending(): Promise<{ checked: number; paid: number }> {
+export async function reconcilePendingPix(): Promise<{ checked: number; paid: number }> {
   if (Date.now() - lastKokuReconcile < 60_000) return { checked: 0, paid: 0 };
   lastKokuReconcile = Date.now();
   const db = await admin();
   const { data, error } = await db
     .from("pix_orders")
     .select("id")
-    .like("id", "ko_%")
+    .or("id.like.ko_%,id.like.pb_%")
     .is("paid_reported_at", null)
     .not("status", "in", "(paid,expired,refused,refunded)")
     .gte("created_at", new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString())
     .order("created_at", { ascending: false })
     .limit(40);
   if (error) {
-    console.error("koku-reconcile query", error.message);
+    console.error("pix-reconcile query", error.message);
     return { checked: 0, paid: 0 };
   }
-  const ids = ((data ?? []) as { id: string }[]).map((o) => o.id).filter((id) => id.startsWith("ko_"));
+  const ids = ((data ?? []) as { id: string }[]).map((o) => o.id).filter((id) => id.startsWith("ko_") || id.startsWith("pb_"));
   let paid = 0;
   for (let i = 0; i < ids.length; i += 5) {
     await Promise.all(
@@ -568,11 +569,11 @@ export async function reconcileKokuPending(): Promise<{ checked: number; paid: n
               .is("paid_reported_at", null);
           }
         } catch (e) {
-          console.error("koku-reconcile", id, e instanceof Error ? e.message : e);
+          console.error("pix-reconcile", id, e instanceof Error ? e.message : e);
         }
       }),
     );
   }
-  console.log("koku-reconcile", ids.length, "conferidos,", paid, "pagos");
+  console.log("pix-reconcile", ids.length, "conferidos,", paid, "pagos");
   return { checked: ids.length, paid };
 }

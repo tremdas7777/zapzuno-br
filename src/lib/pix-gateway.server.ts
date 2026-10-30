@@ -1,4 +1,5 @@
-// Gateway do Pix escolhido no /admin: PixGate (padrão), Umbrella, SagacePay, PayShark ou Koku. Somente servidor.
+// Gateway do Pix escolhido no /admin: PixGate (padrão), Umbrella, SagacePay, PayShark, Koku ou Pix Black.
+// Somente servidor.
 // A escolha vale para os próximos Pix. Cada pedido guarda no id qual gateway gerou o Pix, então a
 // consulta de status e o webhook continuam no gateway certo mesmo depois de uma troca.
 // Se o gateway ativo falhar (conta desligada, chave recusada, fora do ar), o Pix sai pelo próximo
@@ -15,8 +16,16 @@ import {
 import { getSagacePayKey, sagaceCashin, sagaceStatus } from "@/lib/sagacepay.server";
 import { getPaySharkKey, paysharkCashin, paysharkStatus } from "@/lib/payshark.server";
 import { getKokuKey, kokuCashin, kokuStatus } from "@/lib/koku.server";
+import { getPixBlackKey, pixblackCashin, pixblackStatus } from "@/lib/pixblack.server";
 
-export const PIX_GATEWAYS = ["pixgate", "umbrella", "sagacepay", "payshark", "koku"] as const;
+export const PIX_GATEWAYS = [
+  "pixgate",
+  "umbrella",
+  "sagacepay",
+  "payshark",
+  "koku",
+  "pixblack",
+] as const;
 export type PixGateway = (typeof PIX_GATEWAYS)[number];
 export const PIX_GATEWAY_LABEL: Record<PixGateway, string> = {
   umbrella: "Umbrella",
@@ -24,6 +33,7 @@ export const PIX_GATEWAY_LABEL: Record<PixGateway, string> = {
   sagacepay: "SagacePay",
   payshark: "PayShark",
   koku: "Koku",
+  pixblack: "Pix Black",
 };
 
 /** Pedidos Pix da Umbrella são guardados com este prefixo (os da PixGate ficam sem prefixo). */
@@ -38,6 +48,9 @@ export const isPaySharkOrderId = (id: string) => id.startsWith(PAYSHARK_ORDER_PR
 /** Pedidos Pix da Koku são guardados com este prefixo. */
 export const KOKU_ORDER_PREFIX = "ko_";
 export const isKokuOrderId = (id: string) => id.startsWith(KOKU_ORDER_PREFIX);
+/** Pedidos Pix da Pix Black são guardados com este prefixo. */
+export const PIXBLACK_ORDER_PREFIX = "pb_";
+export const isPixBlackOrderId = (id: string) => id.startsWith(PIXBLACK_ORDER_PREFIX);
 
 /** O Pix da SagacePay e da Koku expira em 30 minutos (mesmo prazo mostrado no checkout). */
 const PIX_EXPIRES_IN_SECONDS = 30 * 60;
@@ -66,12 +79,13 @@ async function savedChoice(): Promise<PixGateway | null> {
 
 /** Quais gateways têm chave cadastrada (painel ou secret do Lovable). */
 async function configured(): Promise<Record<PixGateway, boolean>> {
-  const [umbrella, pixgate, sagacepay, payshark, koku] = await Promise.all([
+  const [umbrella, pixgate, sagacepay, payshark, koku, pixblack] = await Promise.all([
     getUmbrellaKey().catch(() => null),
     getPixgateKey().catch(() => null),
     getSagacePayKey().catch(() => null),
     getPaySharkKey().catch(() => null),
     getKokuKey().catch(() => null),
+    getPixBlackKey().catch(() => null),
   ]);
   return {
     umbrella: !!umbrella,
@@ -79,6 +93,7 @@ async function configured(): Promise<Record<PixGateway, boolean>> {
     sagacepay: !!sagacepay,
     payshark: !!payshark,
     koku: !!koku,
+    pixblack: !!pixblack,
   };
 }
 
@@ -240,6 +255,16 @@ async function chargeWith(gateway: PixGateway, o: PixInput): Promise<PixCharge> 
     });
     return { ...tx, id: `${KOKU_ORDER_PREFIX}${tx.id}` };
   }
+  if (gateway === "pixblack") {
+    // Sem postback por cobrança: o webhook da Pix Black é cadastrado no painel deles.
+    const tx = await pixblackCashin({
+      amountCents: o.amount,
+      customer: o.customer,
+      description: o.description,
+      externalReference: crypto.randomUUID(),
+    });
+    return { ...tx, id: `${PIXBLACK_ORDER_PREFIX}${tx.id}` };
+  }
   return pixgateCashin({ ...o, postback: webhook });
 }
 
@@ -252,6 +277,7 @@ export async function fetchPixStatus(id: string): Promise<{ status: string; amou
   if (isSagacePayOrderId(id)) return sagaceStatus(id.slice(SAGACEPAY_ORDER_PREFIX.length));
   if (isPaySharkOrderId(id)) return paysharkStatus(id.slice(PAYSHARK_ORDER_PREFIX.length));
   if (isKokuOrderId(id)) return kokuStatus(id.slice(KOKU_ORDER_PREFIX.length));
+  if (isPixBlackOrderId(id)) return pixblackStatus(id.slice(PIXBLACK_ORDER_PREFIX.length));
   return pixgateStatus(id);
 }
 

@@ -8,26 +8,29 @@ import { fmtDateTime } from "@/lib/admin-format";
 import { Pill, SettingCard, SettingHeader } from "./kit";
 import {
   deleteKokuKeyFn,
+  deletePixBlackKeyFn,
   deletePaySharkKeyFn,
   deletePixgateKeyFn,
   deleteSagacePayKeyFn,
   deleteUmbrellaKeyFn,
   getPixGatewayStatus,
   saveKokuKeyFn,
+  savePixBlackKeyFn,
   savePaySharkKeyFn,
   savePixgateKeyFn,
   saveSagacePayKeyFn,
   saveUmbrellaKeyFn,
   setPixGatewayFn,
   testKokuFn,
+  testPixBlackFn,
   testPaySharkFn,
   testPixgateFn,
   testSagacePayFn,
   testUmbrellaFn,
 } from "@/lib/pix-gateway.functions";
 
-type Gateway = "pixgate" | "umbrella" | "sagacepay" | "payshark" | "koku";
-const GATEWAYS = ["pixgate", "umbrella", "sagacepay", "payshark", "koku"] as const;
+type Gateway = "pixgate" | "umbrella" | "sagacepay" | "payshark" | "koku" | "pixblack";
+const GATEWAYS = ["pixgate", "umbrella", "sagacepay", "payshark", "koku", "pixblack"] as const;
 type KeyInfo = { key: string | null; source: "admin" | "secret" | null };
 type Status = {
   selected: Gateway;
@@ -43,6 +46,7 @@ const LABEL: Record<Gateway, string> = {
   sagacepay: "SagacePay",
   payshark: "PayShark",
   koku: "Koku",
+  pixblack: "Pix Black",
 };
 const SECRET: Record<Gateway, string> = {
   pixgate: "PIXGATE_API_KEY",
@@ -50,9 +54,10 @@ const SECRET: Record<Gateway, string> = {
   sagacepay: "SAGACEPAY_API_KEY",
   payshark: "PAYSHARK_API_KEY",
   koku: "KOKU_API_KEY",
+  pixblack: "PIXBLACK_API_KEY",
 };
 
-/** Escolha do gateway do Pix (PixGate, Umbrella, SagacePay, PayShark ou Koku) + chave de cada um. */
+/** Escolha do gateway do Pix (PixGate, Umbrella, SagacePay, PayShark, Koku ou Pix Black) + chave de cada um. */
 export function PixGatewayCard({ password }: { password: string }) {
   const statusFn = useServerFn(getPixGatewayStatus);
   const setFn = useServerFn(setPixGatewayFn);
@@ -71,12 +76,16 @@ export function PixGatewayCard({ password }: { password: string }) {
   const saveKokuFn = useServerFn(saveKokuKeyFn);
   const deleteKokuFn = useServerFn(deleteKokuKeyFn);
   const testKoku = useServerFn(testKokuFn);
+  const savePixBlackFn = useServerFn(savePixBlackKeyFn);
+  const deletePixBlackFn = useServerFn(deletePixBlackKeyFn);
+  const testPixBlack = useServerFn(testPixBlackFn);
   const keyFns = {
     pixgate: { save: savePixgateFn, remove: deletePixgateFn, test: testPixgate },
     umbrella: { save: saveUmbrellaFn, remove: deleteUmbrellaFn, test: testUmbrella },
     sagacepay: { save: saveSagaceFn, remove: deleteSagaceFn, test: testSagace },
     payshark: { save: savePaySharkFn, remove: deletePaySharkFn, test: testPayShark },
     koku: { save: saveKokuFn, remove: deleteKokuFn, test: testKoku },
+    pixblack: { save: savePixBlackFn, remove: deletePixBlackFn, test: testPixBlack },
   };
 
   const [status, setStatus] = useState<Status | null>(null);
