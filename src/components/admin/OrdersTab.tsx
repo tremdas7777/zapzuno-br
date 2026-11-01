@@ -569,10 +569,17 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 function UtmifyBadge({ order: o }: { order: AdminOrder }) {
   const rr = (o.report_result ?? {}) as Record<
     string,
-    { ok?: boolean; status?: number; error?: string } | undefined
+    { ok?: boolean; status?: number; error?: string; skipped?: string } | undefined
   >;
   const r = isPaid(o) ? rr["utmify"] : rr["utmifyPending"];
   if (!r) return <span className="text-xs text-[#98a2b3]">—</span>;
+  // Pago muito depois do Pix gerado: de propósito não vai para a UTMify (não cai como venda de hoje).
+  if (r.skipped)
+    return (
+      <span title={r.skipped} className="cursor-help">
+        <Pill tone="gray">Não enviado (venda antiga)</Pill>
+      </span>
+    );
   if (r.ok) return <Pill tone="green">Enviado</Pill>;
   return (
     <span title={`${r.status ?? ""} ${r.error ?? ""}`.trim()} className="cursor-help">

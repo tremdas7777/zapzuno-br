@@ -236,6 +236,13 @@ async function sendUtmifyMainOrder(mainId: string) {
 }
 
 /**
+ * Pix pago mais de 3 h depois de gerado (reconferência de pedido antigo, aprovação manual): fica pago
+ * no /admin e vai para o envio, mas não vai para a UTMify nem para o Meta, senão entra como venda de
+ * hoje e bagunça a marcação das campanhas do dia.
+ */
+const VENDA_ANTIGA_MS = 3 * 60 * 60 * 1000;
+
+/**
  * Reporta a venda aprovada uma única vez (idempotente via paid_reported_at).
  * `extra` traz cookies do Meta/URL quando a chamada vem do navegador.
  */
@@ -290,32 +297,43 @@ export async function reportPaidOnce(
     const upsellOf = c.upsellOf;
     // Canal que já confirmou o recebimento numa tentativa anterior não recebe de novo (sem duplicar venda).
     const done = (o.report_result ?? {}) as { utmify?: { ok?: boolean }; meta?: { ok?: boolean } };
-    const utmify = done.utmify?.ok ? done.utmify : await sendUtmifyMainOrder(upsellOf ?? id);
+    const antiga = Date.now() - new Date(o.created_at).getTime() > VENDA_ANTIGA_MS;
+    const naoEnviada = {
+      ok: true,
+      skipped: "venda antiga (Pix pago mais de 3 h depois de gerado)",
+    };
+    const utmify = done.utmify?.ok
+      ? done.utmify
+      : antiga
+        ? naoEnviada
+        : await sendUtmifyMainOrder(upsellOf ?? id);
     const meta = done.meta?.ok
       ? done.meta
-      : await sendCapiEvent({
-          eventName: upsellOf ? "Upsell" : "Purchase",
-          eventId: `${upsellOf ? "upsell" : "purchase"}-${id}`,
-          url: extra?.url,
-          user: {
-            email: c.email,
-            phone: c.phone,
-            name: c.name,
-            cpf: c.cpf,
-            fbp: extra?.fbp ?? o.fbp ?? null,
-            fbc: extra?.fbc ?? o.fbc ?? null,
-            ip: extra?.ip ?? o.ip ?? null,
-            ua: extra?.ua ?? o.ua ?? null,
-          },
-          customData: {
-            value: amount / 100,
-            currency: "BRL",
-            content_name: productName,
-            content_ids: [o.bundle_id],
-            content_type: "product",
-            order_id: id,
-          },
-        });
+      : antiga
+        ? naoEnviada
+        : await sendCapiEvent({
+            eventName: upsellOf ? "Upsell" : "Purchase",
+            eventId: `${upsellOf ? "upsell" : "purchase"}-${id}`,
+            url: extra?.url,
+            user: {
+              email: c.email,
+              phone: c.phone,
+              name: c.name,
+              cpf: c.cpf,
+              fbp: extra?.fbp ?? o.fbp ?? null,
+              fbc: extra?.fbc ?? o.fbc ?? null,
+              ip: extra?.ip ?? o.ip ?? null,
+              ua: extra?.ua ?? o.ua ?? null,
+            },
+            customData: {
+              value: amount / 100,
+              currency: "BRL",
+              content_name: productName,
+              content_ids: [o.bundle_id],
+              content_type: "product",
+              order_id: id,
+            },
+          });
     // Rastreio (Rotasync). Se a API já respondeu de forma definitiva (sucesso, 422, 401, 402, 403),
     // não reenvia; pedidos que ficaram de fora vão pelo /admin (RotaSync → Pedidos antigos).
     const prev = (o.report_result as { rastro?: RastroSalvo } | null)?.rastro;
