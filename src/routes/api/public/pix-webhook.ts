@@ -25,7 +25,15 @@ export const Route = createFileRoute("/api/public/pix-webhook")({
           try {
             const { fetchGatewayStatus, reportPaidOnce, isPaidStatus, getOrder } =
               await import("@/lib/pix-orders.server");
-            if (!(await getOrder(id))) return Response.json({ ok: true });
+            if (!(await getOrder(id))) {
+              // Cobrança de outra loja (a conta Pix Black é uma só): repassa o pagamento às outras.
+              const { relayPixBlackPaid, PIXBLACK_RELAY_HEADER } =
+                await import("@/lib/pixblack-relay.server");
+              if (body?.type === "charge.paid" && !request.headers.has(PIXBLACK_RELAY_HEADER)) {
+                await relayPixBlackPaid(id.slice(3));
+              }
+              return Response.json({ ok: true });
+            }
             const { status, amount } = await fetchGatewayStatus(id);
             if (isPaidStatus(status)) await reportPaidOnce(id, amount);
           } catch (e) {
