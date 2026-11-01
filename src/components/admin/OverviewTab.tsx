@@ -169,44 +169,72 @@ const ETAPAS_UPSELL: EtapaUpsell[] = UPSELL_PRODUCTS.some((p) => p.startsWith("p
   ? ["pilhas", "ofertas", "expresso"]
   : ["ofertas", "expresso"];
 
+function GeradoPago({
+  valorGerado,
+  gerados,
+  valorPago,
+  pagos,
+  notaGerado,
+  destaque,
+}: {
+  valorGerado: number;
+  gerados: number;
+  valorPago: number;
+  pagos: number;
+  notaGerado: string;
+  destaque?: boolean;
+}) {
+  const tamanho = destaque ? "text-2xl" : "text-lg";
+  return (
+    <dl className={destaque ? "grid gap-3 sm:grid-cols-2" : "grid grid-cols-2 gap-3"}>
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-[#667085]">Gerado</dt>
+        <dd className={`mt-0.5 font-semibold tabular-nums text-[#101828] ${tamanho}`}>
+          {brlCents(valorGerado)}
+        </dd>
+        <dd className="text-xs text-[#667085]">
+          {gerados} Pix · {notaGerado}
+        </dd>
+      </div>
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-[#667085]">Pago</dt>
+        <dd className={`mt-0.5 font-semibold tabular-nums text-[#027a48] ${tamanho}`}>
+          {brlCents(valorPago)}
+        </dd>
+        <dd className="text-xs text-[#667085]">
+          {pagos} Pix · {pct(pagos, gerados)}% dos gerados
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
 function PosCompra({ resumo }: { resumo: ReturnType<typeof resumoUpsell> }) {
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px] text-[#667085]">
-        <span>
-          De <b className="text-[#101828]">{resumo.pedidosPagos}</b>{" "}
-          {resumo.pedidosPagos === 1 ? "pedido pago" : "pedidos pagos"}
-        </span>
-        <span>
-          Total pago: <b className="text-[#101828]">{brlCents(resumo.valorPago)}</b> ·{" "}
-          {resumo.pagos} de {resumo.gerados} Pix
-        </span>
+      <div className="rounded-lg bg-[#f9fafb] p-4">
+        <GeradoPago
+          destaque
+          valorGerado={resumo.valorGerado}
+          gerados={resumo.gerados}
+          valorPago={resumo.valorPago}
+          pagos={resumo.pagos}
+          notaGerado={`em ${resumo.pedidosPagos} ${resumo.pedidosPagos === 1 ? "pedido pago" : "pedidos pagos"}`}
+        />
       </div>
-      <ul className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+      <ul className="mt-3 grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
         {resumo.linhas.map((l) => (
           <li key={l.etapa} className="min-w-0 rounded-lg border border-[#eef0f3] p-4">
-            <p className="truncate text-[13px] font-medium text-[#344054]">
+            <p className="mb-2 truncate text-[13px] font-semibold text-[#344054]">
               {ROTULO_UPSELL[l.etapa]}
             </p>
-            <p className="mt-1.5 text-xl font-semibold tabular-nums text-[#101828]">
-              {brlCents(l.valorPago)}
-            </p>
-            <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-[#eef0f3] pt-3 text-xs text-[#667085]">
-              <div className="min-w-0">
-                <dt>Pix gerados</dt>
-                <dd className="mt-0.5 text-base font-semibold tabular-nums text-[#101828]">
-                  {l.gerados}
-                </dd>
-                <dd>{pct(l.gerados, resumo.pedidosPagos)}% dos pedidos</dd>
-              </div>
-              <div className="min-w-0">
-                <dt>Pagos</dt>
-                <dd className="mt-0.5 text-base font-semibold tabular-nums text-[#101828]">
-                  {l.pagos}
-                </dd>
-                <dd>{pct(l.pagos, l.gerados)}% dos gerados</dd>
-              </div>
-            </dl>
+            <GeradoPago
+              valorGerado={l.valorGerado}
+              gerados={l.gerados}
+              valorPago={l.valorPago}
+              pagos={l.pagos}
+              notaGerado={`${pct(l.gerados, resumo.pedidosPagos)}% dos pedidos`}
+            />
           </li>
         ))}
       </ul>
@@ -360,6 +388,14 @@ export function OverviewTab({
         />
       </div>
 
+      <Panel
+        className="mt-4"
+        title="Upsell (pós-compra)"
+        description={`Pix gerados e pagos depois da compra, ${periodoTexto}`}
+      >
+        <PosCompra resumo={upsell} />
+      </Panel>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-5">
         <Panel
           className="lg:col-span-3"
@@ -376,14 +412,6 @@ export function OverviewTab({
           <Funil etapas={etapas} />
         </Panel>
       </div>
-
-      <Panel
-        className="mt-4"
-        title="Upsell (pós-compra)"
-        description={`Pix gerados e pagos depois da compra, ${periodoTexto}`}
-      >
-        <PosCompra resumo={upsell} />
-      </Panel>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-5">
         <Panel

@@ -6,6 +6,8 @@ export type LinhaUpsell = {
   gerados: number;
   pagos: number;
   /** Centavos. */
+  valorGerado: number;
+  /** Centavos. */
   valorPago: number;
 };
 
@@ -32,7 +34,7 @@ export function etapaDoUpsell(itens: readonly string[] | undefined): EtapaUpsell
  */
 export function resumoUpsell(orders: readonly PedidoResumo[], etapas: readonly EtapaUpsell[]) {
   const linhas = new Map<EtapaUpsell, LinhaUpsell>(
-    etapas.map((etapa) => [etapa, { etapa, gerados: 0, pagos: 0, valorPago: 0 }]),
+    etapas.map((etapa) => [etapa, { etapa, gerados: 0, pagos: 0, valorGerado: 0, valorPago: 0 }]),
   );
   let pedidosPagos = 0;
   for (const o of orders) {
@@ -44,9 +46,10 @@ export function resumoUpsell(orders: readonly PedidoResumo[], etapas: readonly E
       continue;
     }
     const etapa = etapaDoUpsell(c.upsellItems);
-    const linha = linhas.get(etapa) ?? { etapa, gerados: 0, pagos: 0, valorPago: 0 };
+    const linha = linhas.get(etapa) ?? { etapa, gerados: 0, pagos: 0, valorGerado: 0, valorPago: 0 };
     linhas.set(etapa, linha);
     linha.gerados++;
+    linha.valorGerado += o.amount_cents;
     if (pago) {
       linha.pagos++;
       linha.valorPago += o.amount_cents;
@@ -58,6 +61,7 @@ export function resumoUpsell(orders: readonly PedidoResumo[], etapas: readonly E
     linhas: todas,
     gerados: todas.reduce((s, l) => s + l.gerados, 0),
     pagos: todas.reduce((s, l) => s + l.pagos, 0),
+    valorGerado: todas.reduce((s, l) => s + l.valorGerado, 0),
     valorPago: todas.reduce((s, l) => s + l.valorPago, 0),
   };
 }
