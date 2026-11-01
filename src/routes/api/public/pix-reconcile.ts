@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// Conferência agendada dos Pix não pagos (chamada a cada minuto por um agendamento no banco).
+// Conferência agendada dos Pix não pagos (chamada a cada 30 s por um agendamento no banco).
 // Pública e sem dados: só consulta o gateway e marca os pagos; a trava em reconcilePendingPix
-// limita a 1 rodada a cada 50 s, então chamar mais vezes não pesa no gateway.
+// limita a 1 rodada a cada 25 s, então chamar mais vezes não pesa no gateway.
 async function rodar() {
   const { reconcilePendingPix } = await import("@/lib/pix-orders.server");
   const r = await reconcilePendingPix().catch((e) => {

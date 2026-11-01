@@ -584,7 +584,7 @@ export const getPixStatus = createServerFn({ method: "GET" })
         ua: h?.get("user-agent") ?? null,
       });
     }
-    // A tela do Pix também dispara a conferência dos outros pendentes (no máximo 1 rodada a cada 50 s).
+    // A tela do Pix também dispara a conferência dos outros pendentes (no máximo 1 rodada a cada 25 s).
     await reconcilePendingPix().catch((e) => console.error("pix-reconcile failed", e));
     return { status, paid };
   });

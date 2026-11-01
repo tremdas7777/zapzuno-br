@@ -22,6 +22,7 @@ import { brand } from "@/lib/brand";
 import { isPaidStatus } from "@/lib/pix-status";
 import { getCardTransaction, isCardOrderId, CARD_ORDER_PREFIX } from "@/lib/hypercash.server";
 import { fetchPixStatus } from "@/lib/pix-gateway.server";
+import { needsUtmifyRetry, type PaidOrderReport } from "@/lib/utmify-retry";
 
 export type StoredCustomer = {
   name: string;
@@ -547,35 +548,87 @@ const KOKU_FINAL: Record<string, string> = {
 };
 let lastKokuReconcile = 0;
 const RECONCILE_KEY = "pix_reconcile_at";
-const RECONCILE_EVERY_MS = 50_000;
+// O agendamento chama a cada 30 s; a trava de 25 s deixa passar cada chamada dele.
+const RECONCILE_EVERY_MS = 25_000;
+const ANTIGOS_KEY = "pix_reconcile_antigos_at";
+const ANTIGOS_EVERY_MS = 10 * 60_000;
 
-/**
- * Trava da conferência para a loja toda (várias instâncias, /admin, agendamento e tela do Pix):
- * no máximo 1 rodada a cada 50 s. Sem a trava do banco, vale a da instância.
- */
-async function claimReconcile(): Promise<boolean> {
-  if (Date.now() - lastKokuReconcile < RECONCILE_EVERY_MS) return false;
-  lastKokuReconcile = Date.now();
+/** Trava no banco para a loja toda (várias instâncias): true = esta chamada pode rodar. */
+async function claimLock(key: string, everyMs: number, seDerErro: boolean): Promise<boolean> {
   const db = await admin();
   const now = new Date().toISOString();
   try {
     const { data, error } = await db
       .from("private_settings")
       .update({ value: now, updated_at: now })
-      .eq("key", RECONCILE_KEY)
-      .lt("value", new Date(Date.now() - RECONCILE_EVERY_MS).toISOString())
+      .eq("key", key)
+      .lt("value", new Date(Date.now() - everyMs).toISOString())
       .select("key");
     if (error) throw new Error(error.message);
     if (data?.length) return true;
     // Primeira rodada da loja cria a linha; se ela já existe, outra instância acabou de conferir.
     const { error: insertError } = await db
       .from("private_settings")
-      .insert({ key: RECONCILE_KEY, value: now, updated_at: now });
+      .insert({ key, value: now, updated_at: now });
     return !insertError;
   } catch (e) {
-    console.error("pix-reconcile trava", e instanceof Error ? e.message : e);
-    return true;
+    console.error("pix-reconcile trava", key, e instanceof Error ? e.message : e);
+    return seDerErro;
   }
+}
+
+/**
+ * Trava da conferência (várias instâncias, /admin, agendamento e tela do Pix): no máximo 1 rodada a
+ * cada 25 s. Sem a trava do banco, vale a da instância.
+ */
+async function claimReconcile(): Promise<boolean> {
+  if (Date.now() - lastKokuReconcile < RECONCILE_EVERY_MS) return false;
+  lastKokuReconcile = Date.now();
+  return claimLock(RECONCILE_KEY, RECONCILE_EVERY_MS, true);
+}
+
+/**
+ * Venda paga que a UTMify não confirmou (UTMify fora do ar, queda de conexão ou processo cortado no
+ * meio do envio). O pedido já está "paid" e sai das consultas de pendentes, então sem isto a venda
+ * nunca mais seria reenviada. A UTMify atualiza pelo orderId: reenviar não duplica a venda.
+ * Só vendas das últimas 3 h (as mais antigas não vão para a UTMify, veja VENDA_ANTIGA_MS).
+ */
+async function retryUtmifyFailed(): Promise<number> {
+  const db = await admin();
+  const agora = Date.now();
+  const { data, error } = await db
+    .from("pix_orders")
+    .select("id, paid_reported_at, report_result")
+    .eq("status", "paid")
+    .gte("created_at", new Date(agora - VENDA_ANTIGA_MS).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) {
+    console.error("pix-reconcile utmify query", error.message);
+    return 0;
+  }
+  const falhos = ((data ?? []) as PaidOrderReport[]).filter((o) => needsUtmifyRetry(o, agora));
+  let reenviados = 0;
+  for (let i = 0; i < falhos.length; i += 8) {
+    await Promise.all(
+      falhos.slice(i, i + 8).map(async (o) => {
+        try {
+          if (o.paid_reported_at) {
+            await db
+              .from("pix_orders")
+              .update({ paid_reported_at: null })
+              .eq("id", o.id)
+              .eq("paid_reported_at", o.paid_reported_at);
+          }
+          await reportPaidOnce(o.id, 0);
+          reenviados++;
+        } catch (e) {
+          console.error("pix-reconcile utmify", o.id, e instanceof Error ? e.message : e);
+        }
+      }),
+    );
+  }
+  return reenviados;
 }
 
 /**
@@ -584,15 +637,21 @@ async function claimReconcile(): Promise<boolean> {
  * - Pendentes das últimas 2 h: toda rodada. Pendentes de 2 h a 72 h: a cada 10 minutos.
  * - "Expirados" das últimas 24 h também: a Pix Black já respondeu "expired" e minutos depois "paid"
  *   (30/10, pedido pb_f8063ee4 da Beam), e antes disso o pedido ficava expirado para sempre.
- * Roda pelo /admin, pela tela do Pix e pelo agendamento (/api/public/pix-reconcile, a cada minuto).
+ * - Venda paga que a UTMify não confirmou: reenviada (retryUtmifyFailed).
+ * Roda pelo /admin, pela tela do Pix e pelo agendamento (/api/public/pix-reconcile, a cada 30 s).
  */
-export async function reconcilePendingPix(): Promise<{ checked: number; paid: number }> {
+export async function reconcilePendingPix(): Promise<{
+  checked: number;
+  paid: number;
+  utmify?: number;
+}> {
   if (!(await claimReconcile())) return { checked: 0, paid: 0 };
   const db = await admin();
   const since = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   const lote = (q: ReturnType<typeof db.from>) =>
     q.is("paid_reported_at", null).not("id", "like", "hc_%").order("created_at", { ascending: false });
-  const antigos = new Date().getUTCMinutes() % 10 === 0;
+  // Trava própria: com rodadas a cada 30 s, "minuto múltiplo de 10" daria 2 rodadas pesadas seguidas.
+  const antigos = await claimLock(ANTIGOS_KEY, ANTIGOS_EVERY_MS, false);
   const consultas = await Promise.all([
     lote(db.from("pix_orders").select("id"))
       .not("status", "in", "(paid,expired,refused,refunded)")
@@ -635,6 +694,19 @@ export async function reconcilePendingPix(): Promise<{ checked: number; paid: nu
       }),
     );
   }
-  console.log("pix-reconcile", ids.length, "conferidos,", paid, "pagos", antigos ? "(com antigos)" : "");
-  return { checked: ids.length, paid };
+  const utmify = await retryUtmifyFailed().catch((e) => {
+    console.error("pix-reconcile utmify failed", e);
+    return 0;
+  });
+  console.log(
+    "pix-reconcile",
+    ids.length,
+    "conferidos,",
+    paid,
+    "pagos,",
+    utmify,
+    "reenviados à UTMify",
+    antigos ? "(com antigos)" : "",
+  );
+  return { checked: ids.length, paid, utmify };
 }
