@@ -578,7 +578,7 @@ async function claimLock(key: string, everyMs: number, seDerErro: boolean): Prom
 }
 
 /**
- * Trava da conferência (várias instâncias, /admin, agendamento e tela do Pix): no máximo 1 rodada a
+ * Trava da conferência (várias instâncias, /admin e agendamento): no máximo 1 rodada a
  * cada 25 s. Sem a trava do banco, vale a da instância.
  */
 async function claimReconcile(): Promise<boolean> {
@@ -638,7 +638,8 @@ async function retryUtmifyFailed(): Promise<number> {
  * - "Expirados" das últimas 24 h também: a Pix Black já respondeu "expired" e minutos depois "paid"
  *   (30/10, pedido pb_f8063ee4 da Beam), e antes disso o pedido ficava expirado para sempre.
  * - Venda paga que a UTMify não confirmou: reenviada (retryUtmifyFailed).
- * Roda pelo /admin, pela tela do Pix e pelo agendamento (/api/public/pix-reconcile, a cada 30 s).
+ * Roda pelo agendamento (/api/public/pix-reconcile, a cada 30 s) e pelo /admin. A tela do Pix do
+ * cliente não roda: ele esperaria a conferência da loja toda antes de ir para o pós-compra.
  */
 export async function reconcilePendingPix(): Promise<{
   checked: number;
