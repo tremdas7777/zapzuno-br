@@ -14,6 +14,8 @@ import {
   tempoRelativo,
 } from "@/lib/admin-format";
 import { getBundle, parseBundleId } from "@/lib/bundles";
+import { UPSELL_PRODUCTS } from "@/lib/upsell";
+import { resumoUpsell, type EtapaUpsell } from "@/lib/upsell-resumo";
 import {
   Avatar,
   EmptyState,
@@ -158,6 +160,60 @@ function Funil({ etapas }: { etapas: { label: string; n: number }[] }) {
   );
 }
 
+const ROTULO_UPSELL: Record<EtapaUpsell, string> = {
+  pilhas: "Pilhas recarregáveis",
+  ofertas: "Kit extra e seguro",
+  expresso: "Envio expresso",
+};
+const ETAPAS_UPSELL: EtapaUpsell[] = UPSELL_PRODUCTS.some((p) => p.startsWith("pilhas"))
+  ? ["pilhas", "ofertas", "expresso"]
+  : ["ofertas", "expresso"];
+
+function PosCompra({ resumo }: { resumo: ReturnType<typeof resumoUpsell> }) {
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px] text-[#667085]">
+        <span>
+          De <b className="text-[#101828]">{resumo.pedidosPagos}</b>{" "}
+          {resumo.pedidosPagos === 1 ? "pedido pago" : "pedidos pagos"}
+        </span>
+        <span>
+          Total pago: <b className="text-[#101828]">{brlCents(resumo.valorPago)}</b> ·{" "}
+          {resumo.pagos} de {resumo.gerados} Pix
+        </span>
+      </div>
+      <ul className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+        {resumo.linhas.map((l) => (
+          <li key={l.etapa} className="min-w-0 rounded-lg border border-[#eef0f3] p-4">
+            <p className="truncate text-[13px] font-medium text-[#344054]">
+              {ROTULO_UPSELL[l.etapa]}
+            </p>
+            <p className="mt-1.5 text-xl font-semibold tabular-nums text-[#101828]">
+              {brlCents(l.valorPago)}
+            </p>
+            <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-[#eef0f3] pt-3 text-xs text-[#667085]">
+              <div className="min-w-0">
+                <dt>Pix gerados</dt>
+                <dd className="mt-0.5 text-base font-semibold tabular-nums text-[#101828]">
+                  {l.gerados}
+                </dd>
+                <dd>{pct(l.gerados, resumo.pedidosPagos)}% dos pedidos</dd>
+              </div>
+              <div className="min-w-0">
+                <dt>Pagos</dt>
+                <dd className="mt-0.5 text-base font-semibold tabular-nums text-[#101828]">
+                  {l.pagos}
+                </dd>
+                <dd>{pct(l.pagos, l.gerados)}% dos gerados</dd>
+              </div>
+            </dl>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function OverviewTab({
   password,
   onVerPedidos,
@@ -218,6 +274,7 @@ export function OverviewTab({
   }, [orders]);
 
   const dados = useMemo(() => serie(orders, days), [orders, days]);
+  const upsell = useMemo(() => resumoUpsell(orders, ETAPAS_UPSELL), [orders]);
 
   const topProdutos = useMemo(() => {
     const m = new Map<string, { id: string; nome: string; qtd: number; total: number }>();
@@ -319,6 +376,14 @@ export function OverviewTab({
           <Funil etapas={etapas} />
         </Panel>
       </div>
+
+      <Panel
+        className="mt-4"
+        title="Upsell (pós-compra)"
+        description={`Pix gerados e pagos depois da compra, ${periodoTexto}`}
+      >
+        <PosCompra resumo={upsell} />
+      </Panel>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-5">
         <Panel

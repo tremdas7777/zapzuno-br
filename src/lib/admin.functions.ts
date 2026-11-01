@@ -115,6 +115,10 @@ export type AdminOrder = {
     /** Aprovado no /admin sem o gateway confirmar (comprovante do cliente). */
     manualApproval?: { at: string; gatewayStatus: string | null };
     discount?: number;
+    /** Compra do pós-compra (pilhas, kit extra, seguro, expresso): id do pedido principal. */
+    upsellOf?: string;
+    upsellItems?: string[];
+    testOf?: string;
   };
   bundle_id: string;
   bundle_name: string;
