@@ -58,6 +58,14 @@ const PIX_EXPIRES_IN_SECONDS = 30 * 60;
 const SETTING = "pix_gateway";
 const DEFAULT_GATEWAY: PixGateway = "pixgate";
 
+/**
+ * Só este gateway gera Pix: sem troca automática para outro e sem escolher outro no /admin
+ * (pedido do usuário em 03/11: "todas somente para Pix Black"). Pedidos antigos dos outros
+ * gateways continuam sendo conferidos pelo prefixo do id. null = volta a escolha do /admin
+ * com o gateway reserva.
+ */
+const GATEWAY_UNICO: PixGateway | null = "pixblack";
+
 async function db() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
@@ -107,6 +115,7 @@ export async function getPixGatewayState(): Promise<{
   configured: Record<PixGateway, boolean>;
 }> {
   const [choice, keys] = await Promise.all([savedChoice(), configured()]);
+  if (GATEWAY_UNICO) return { selected: GATEWAY_UNICO, active: GATEWAY_UNICO, configured: keys };
   const selected = choice ?? DEFAULT_GATEWAY;
   const fallback = PIX_GATEWAYS.find((g) => g !== selected && keys[g]);
   const active = !keys[selected] && fallback ? fallback : selected;
@@ -114,6 +123,9 @@ export async function getPixGatewayState(): Promise<{
 }
 
 export async function savePixGateway(gateway: PixGateway): Promise<void> {
+  if (GATEWAY_UNICO && gateway !== GATEWAY_UNICO) {
+    throw new Error(`Esta loja gera Pix só pela ${PIX_GATEWAY_LABEL[GATEWAY_UNICO]}.`);
+  }
   const keys = await configured();
   if (!keys[gateway]) {
     throw new Error(`Cadastre a chave da ${PIX_GATEWAY_LABEL[gateway]} antes de ativá-la.`);
@@ -150,6 +162,7 @@ const FALLBACK_SETTING = "pix_gateway_fallback";
  */
 export async function createPix(o: PixInput): Promise<PixCharge> {
   const { active, configured: keys } = await getPixGatewayState();
+  if (GATEWAY_UNICO) return chargeWith(GATEWAY_UNICO, o);
   try {
     return await chargeWith(active, o);
   } catch (e) {
