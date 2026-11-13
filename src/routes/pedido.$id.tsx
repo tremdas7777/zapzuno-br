@@ -119,7 +119,8 @@ function Page() {
     );
   if (refused) return <Refused />;
   // Cartão (HyperCash "hc_" ou Legacy "le_"): sem QR; a confirmação vem do status do servidor (poll acima).
-  if (session?.method === "card" || id.startsWith("hc_") || id.startsWith("le_"))
+  // "le_" também é o prefixo do Pix gerado pela Legacy: só vai para o cartão se a sessão não for Pix.
+  if (session?.method === "card" || id.startsWith("hc_") || (id.startsWith("le_") && session?.method !== "pix"))
     return <WaitingCard session={session} />;
   return <WaitingPix session={session} />;
 }
