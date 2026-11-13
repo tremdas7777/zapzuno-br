@@ -21,6 +21,7 @@ import {
   reportPendingToUtmify,
   getOrder,
   findUpsellOf,
+  saveComprovante,
 } from "@/lib/pix-orders.server";
 import { createPix, LEGACY_ORDER_PREFIX } from "@/lib/pix-gateway.server";
 import {
@@ -729,4 +730,27 @@ export const getPixStatus = createServerFn({ method: "GET" })
       });
     }
     return { status, paid };
+  });
+
+/** Comprovante do Pix enviado pelo cliente na página do pedido (fica salvo junto ao pedido). */
+export const enviarComprovantePix = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        id: z.string().regex(/^[\w-]{1,64}$/),
+        name: z.string().min(1).max(200),
+        type: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
+        // Base64 do arquivo. Limite de 3 MB (o corpo da requisição da hospedagem é menor que 5 MB).
+        base64: z.string().min(1).max(4_200_000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const bytes = Buffer.from(data.base64, "base64");
+    if (bytes.length === 0 || bytes.length > 3 * 1024 * 1024) {
+      throw new Error("Arquivo inválido. Envie até 3 MB.");
+    }
+    const ok = await saveComprovante(data.id, { name: data.name, type: data.type, bytes });
+    if (!ok) throw new Error("Pedido não encontrado.");
+    return { ok: true };
   });

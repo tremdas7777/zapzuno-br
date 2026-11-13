@@ -99,6 +99,8 @@ export function periodStart(days: number, now = Date.now()): string {
 
 export type AdminOrder = {
   id: string;
+  /** Comprovantes de Pix enviados pelo cliente na página do pedido. */
+  comprovantes?: { path: string; name: string; type: string; size: number; uploaded_at: string }[];
   status: string;
   amount_cents: number;
   customer: {
@@ -385,3 +387,23 @@ export const approveOrderFn = createServerFn({ method: "POST" })
       return { approved: true, manual: true, gatewayStatus: gw?.status ?? null };
     },
   );
+
+/** Link temporário para o admin abrir um comprovante de Pix enviado pelo cliente. */
+export const getComprovanteAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        password: z.string().min(1).max(200),
+        path: z.string().min(3).max(300),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<{ url: string }> => {
+    if (!senhaAdminOk(data.password)) {
+      throw new Error("Unauthorized");
+    }
+    const { comprovanteSignedUrl } = await import("@/lib/pix-orders.server");
+    const url = await comprovanteSignedUrl(data.path);
+    if (!url) throw new Error("Comprovante não encontrado.");
+    return { url };
+  });

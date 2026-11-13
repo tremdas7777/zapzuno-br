@@ -112,6 +112,58 @@ export async function getOrder(id: string): Promise<StoredOrder | null> {
   return (data as StoredOrder | null) ?? null;
 }
 
+export type ComprovanteMeta = {
+  path: string;
+  name: string;
+  type: string;
+  size: number;
+  uploaded_at: string;
+};
+
+/** Guarda o comprovante do Pix no bucket privado e registra no pedido. false = pedido não existe. */
+export async function saveComprovante(
+  id: string,
+  f: { name: string; type: string; bytes: Buffer },
+): Promise<boolean> {
+  const db = await admin();
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: order } = await db
+    .from("pix_orders")
+    .select("id,comprovantes")
+    .eq("id", id)
+    .maybeSingle();
+  if (!order) return false;
+
+  const ext = f.type === "application/pdf" ? "pdf" : (f.type.split("/")[1] ?? "bin");
+  const path = `${id}/${Date.now()}.${ext}`;
+  const { error: upErr } = await supabaseAdmin.storage
+    .from("comprovantes")
+    .upload(path, f.bytes, { contentType: f.type, upsert: false });
+  if (upErr) throw new Error("Não consegui salvar o comprovante. Tente de novo.");
+
+  const meta: ComprovanteMeta = {
+    path,
+    name: f.name.slice(0, 120),
+    type: f.type,
+    size: f.bytes.length,
+    uploaded_at: new Date().toISOString(),
+  };
+  const anteriores = Array.isArray(order.comprovantes) ? order.comprovantes : [];
+  const { error } = await db
+    .from("pix_orders")
+    .update({ comprovantes: [...anteriores, meta] })
+    .eq("id", id);
+  if (error) throw new Error("Não consegui registrar o comprovante. Tente de novo.");
+  return true;
+}
+
+/** Link temporário (10 min) para o admin abrir um comprovante. */
+export async function comprovanteSignedUrl(path: string): Promise<string | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin.storage.from("comprovantes").createSignedUrl(path, 600);
+  return data?.signedUrl ?? null;
+}
+
 /**
  * Upsell já gerado para um pedido (evita cobranças duplicadas). São três etapas independentes:
  * as pilhas, as ofertas (kit e/ou seguro) e, por fim, o envio expresso.

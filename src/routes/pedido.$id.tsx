@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { Copy, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Copy, Loader2, Upload } from "lucide-react";
 import pixWaiting from "@/assets/pix-waiting.png";
-import { getPixStatus } from "@/lib/pix.functions";
+import { enviarComprovantePix, getPixStatus } from "@/lib/pix.functions";
 import { metaPurchaseBrowser } from "@/lib/meta-pixel";
 import { loadPixSession, savePixSession, type PixSession } from "@/lib/pix-session";
 import { upsellStepOf } from "@/lib/upsell";
@@ -122,11 +122,102 @@ function Page() {
   // "le_" também é o prefixo do Pix gerado pela Legacy: só vai para o cartão se a sessão não for Pix.
   if (session?.method === "card" || id.startsWith("hc_") || (id.startsWith("le_") && session?.method !== "pix"))
     return <WaitingCard session={session} />;
-  return <WaitingPix session={session} />;
+  return <WaitingPix session={session} id={id} />;
+}
+
+const COMPROVANTE_TIPOS = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
+const COMPROVANTE_MAX = 3 * 1024 * 1024;
+
+function lerComoBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Envio opcional do comprovante do Pix; o arquivo fica salvo junto ao pedido. */
+function ComprovanteBox({ id }: { id: string }) {
+  const enviar = useServerFn(enviarComprovantePix);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [estado, setEstado] = useState<"idle" | "enviando" | "ok" | "erro">("idle");
+  const [nomeEnviado, setNomeEnviado] = useState("");
+  const [erro, setErro] = useState("");
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!(COMPROVANTE_TIPOS as readonly string[]).includes(file.type)) {
+      setEstado("erro");
+      setErro("Envie uma foto (JPG, PNG ou WebP) ou um PDF.");
+      return;
+    }
+    if (file.size > COMPROVANTE_MAX) {
+      setEstado("erro");
+      setErro("Arquivo muito grande. Envie até 3 MB.");
+      return;
+    }
+    setEstado("enviando");
+    setErro("");
+    try {
+      const base64 = await lerComoBase64(file);
+      await enviar({
+        data: {
+          id,
+          name: file.name,
+          type: file.type as (typeof COMPROVANTE_TIPOS)[number],
+          base64,
+        },
+      });
+      setNomeEnviado(file.name);
+      setEstado("ok");
+    } catch {
+      setEstado("erro");
+      setErro("Não consegui enviar o comprovante. Tente de novo.");
+    } finally {
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="mt-8 rounded-xl bg-muted/60 p-5 text-center">
+      <h2 className="text-[17px] font-semibold">Já pagou o Pix?</h2>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        className="hidden"
+        onChange={(e) => onFile(e.target.files?.[0])}
+      />
+      <button
+        type="button"
+        disabled={estado === "enviando"}
+        onClick={() => inputRef.current?.click()}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3.5 text-[15px] font-medium transition hover:bg-muted disabled:opacity-60"
+      >
+        {estado === "enviando" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Upload className="h-4 w-4" />
+        )}
+        {estado === "enviando" ? "Enviando..." : "Enviar comprovante"}{" "}
+        <span className="text-[13px] font-normal text-muted-foreground">(Opcional)</span>
+      </button>
+      {estado === "ok" && (
+        <p className="mt-3 text-sm text-[var(--ck-ok)]">
+          Comprovante recebido ({nomeEnviado}). Obrigado!
+        </p>
+      )}
+      {estado === "erro" && <p className="mt-3 text-sm text-red-600">{erro}</p>}
+      <p className="mt-3 text-sm text-muted-foreground">
+        Seu pagamento será confirmado automaticamente. O comprovante é opcional.
+      </p>
+    </div>
+  );
 }
 
 /** Tela "Quase lá..." — igual à do checkout antigo enquanto o Pix não cai. */
-function WaitingPix({ session }: { session: PixSession | null }) {
+function WaitingPix({ session, id }: { session: PixSession | null; id: string }) {
   const [copied, setCopied] = useState(false);
   // Começa como null para o HTML do servidor e a primeira renderização do
   // navegador serem idênticas (evita erro de hidratação na contagem regressiva).
@@ -216,6 +307,8 @@ function WaitingPix({ session }: { session: PixSession | null }) {
                 ))}
               </ol>
             </div>
+
+            <ComprovanteBox id={id} />
           </>
         ) : (
           <div className="mt-8 rounded-lg border border-border p-6 text-sm text-muted-foreground">
