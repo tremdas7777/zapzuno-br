@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// Notificação da PixGate, da Umbrella, da SagacePay, da PayShark, da Koku e da Pix Black (Pix) e da HyperCash (cartão). O corpo não é confiável: usamos só o id
+// Notificação da PixGate, da Umbrella, da SagacePay, da PayShark, da Koku, da Pix Black e da Legacy Ecom (Pix e cartão) e da HyperCash (cartão). O corpo não é confiável: usamos só o id
 // e sempre confirmamos o status na API autenticada antes de reportar a venda.
 export const Route = createFileRoute("/api/public/pix-webhook")({
   server: {
@@ -15,6 +15,9 @@ export const Route = createFileRoute("/api/public/pix-webhook")({
         const isSagace = gw === "sg";
         // PayShark notifica com ?gw=ps e { id, status, externalRef }; o pedido é salvo com prefixo "ps_".
         const isPayShark = gw === "ps";
+        // Legacy Ecom (Pix e cartão) notifica com ?gw=le e { id, status, paymentMethod, ... }; o pedido é
+        // salvo com prefixo "le_". Não há assinatura aqui: a autenticidade vem de reconsultar GET /payin/{id}.
+        const isLegacy = gw === "le";
         // Pix Black: webhook cadastrado no painel deles (sem ?gw), reconhecido pelo cabeçalho
         // x-pixblack-event. Manda { type, data: { charge_id } }; o pedido é salvo com prefixo "pb_".
         // O "ping" (botão Enviar teste) só recebe 200.
@@ -64,6 +67,7 @@ export const Route = createFileRoute("/api/public/pix-webhook")({
           (isUmbrella ? (body?.objectId ?? body?.data?.id ?? body?.id) : undefined) ??
           (isSagace ? (body?.data?.id ?? body?.id ?? body?.sale?.id) : undefined) ??
           (isPayShark ? (body?.id ?? body?.data?.id) : undefined) ??
+          (isLegacy ? (body?.id ?? body?.data?.id) : undefined) ??
           body?.transaction_id ??
           body?.id ??
           body?.transaction?.id ??
@@ -79,7 +83,9 @@ export const Route = createFileRoute("/api/public/pix-webhook")({
               ? "sg_"
               : isPayShark
                 ? "ps_"
-                : "";
+                : isLegacy
+                  ? "le_"
+                  : "";
         const id = rawId == null ? "" : `${prefix}${String(rawId)}`;
         console.log("pix-webhook", body?.event, id);
         if (!/^[\w-]{1,64}$/.test(id)) return Response.json({ ok: true });

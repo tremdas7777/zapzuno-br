@@ -1,4 +1,4 @@
-// Gateway do Pix escolhido no /admin: PixGate (padrão), Umbrella, SagacePay, PayShark, Koku ou Pix Black.
+// Gateway do Pix escolhido no /admin: PixGate (padrão), Umbrella, SagacePay, PayShark, Koku, Pix Black ou Legacy Ecom.
 // Somente servidor.
 // A escolha vale para os próximos Pix. Cada pedido guarda no id qual gateway gerou o Pix, então a
 // consulta de status e o webhook continuam no gateway certo mesmo depois de uma troca.
@@ -17,6 +17,7 @@ import { getSagacePayKey, sagaceCashin, sagaceStatus } from "@/lib/sagacepay.ser
 import { getPaySharkKey, paysharkCashin, paysharkStatus } from "@/lib/payshark.server";
 import { getKokuKey, kokuCashin, kokuStatus } from "@/lib/koku.server";
 import { getPixBlackKey, pixblackCashin, pixblackStatus } from "@/lib/pixblack.server";
+import { getLegacyKey, legacyPixCashin, legacyStatus } from "@/lib/legacy.server";
 
 export const PIX_GATEWAYS = [
   "pixgate",
@@ -25,6 +26,7 @@ export const PIX_GATEWAYS = [
   "payshark",
   "koku",
   "pixblack",
+  "legacy",
 ] as const;
 export type PixGateway = (typeof PIX_GATEWAYS)[number];
 export const PIX_GATEWAY_LABEL: Record<PixGateway, string> = {
@@ -34,6 +36,7 @@ export const PIX_GATEWAY_LABEL: Record<PixGateway, string> = {
   payshark: "PayShark",
   koku: "Koku",
   pixblack: "Pix Black",
+  legacy: "Legacy Ecom",
 };
 
 /** Pedidos Pix da Umbrella são guardados com este prefixo (os da PixGate ficam sem prefixo). */
@@ -51,6 +54,9 @@ export const isKokuOrderId = (id: string) => id.startsWith(KOKU_ORDER_PREFIX);
 /** Pedidos Pix da Pix Black são guardados com este prefixo. */
 export const PIXBLACK_ORDER_PREFIX = "pb_";
 export const isPixBlackOrderId = (id: string) => id.startsWith(PIXBLACK_ORDER_PREFIX);
+/** Pedidos (Pix e cartão) da Legacy Ecom são guardados com este prefixo. */
+export const LEGACY_ORDER_PREFIX = "le_";
+export const isLegacyOrderId = (id: string) => id.startsWith(LEGACY_ORDER_PREFIX);
 
 /** O Pix da SagacePay e da Koku expira em 30 minutos (mesmo prazo mostrado no checkout). */
 const PIX_EXPIRES_IN_SECONDS = 30 * 60;
@@ -64,7 +70,7 @@ const DEFAULT_GATEWAY: PixGateway = "pixgate";
  * gateways continuam sendo conferidos pelo prefixo do id. null = volta a escolha do /admin
  * com o gateway reserva.
  */
-const GATEWAY_UNICO: PixGateway | null = "pixblack";
+const GATEWAY_UNICO: PixGateway | null = null;
 
 async function db() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -87,13 +93,14 @@ async function savedChoice(): Promise<PixGateway | null> {
 
 /** Quais gateways têm chave cadastrada (painel ou secret do Lovable). */
 async function configured(): Promise<Record<PixGateway, boolean>> {
-  const [umbrella, pixgate, sagacepay, payshark, koku, pixblack] = await Promise.all([
+  const [umbrella, pixgate, sagacepay, payshark, koku, pixblack, legacy] = await Promise.all([
     getUmbrellaKey().catch(() => null),
     getPixgateKey().catch(() => null),
     getSagacePayKey().catch(() => null),
     getPaySharkKey().catch(() => null),
     getKokuKey().catch(() => null),
     getPixBlackKey().catch(() => null),
+    getLegacyKey().catch(() => null),
   ]);
   return {
     umbrella: !!umbrella,
@@ -102,6 +109,7 @@ async function configured(): Promise<Record<PixGateway, boolean>> {
     payshark: !!payshark,
     koku: !!koku,
     pixblack: !!pixblack,
+    legacy: !!legacy,
   };
 }
 
@@ -167,9 +175,10 @@ export async function createPix(o: PixInput): Promise<PixCharge> {
     return await chargeWith(active, o);
   } catch (e) {
     if (e instanceof PayerDataError) throw e;
-    // A PayShark exige endereço: sem ele, ela não serve de reserva.
+    // A PayShark exige endereço e a Legacy exige IP do pagador: sem eles, nenhuma das duas serve de reserva.
     const next = PIX_GATEWAYS.find(
-      (g) => g !== active && keys[g] && (g !== "payshark" || !!o.address),
+      (g) =>
+        g !== active && keys[g] && (g !== "payshark" || !!o.address) && (g !== "legacy" || !!o.ip),
     );
     if (!next) throw e;
     const reason = (e instanceof Error ? e.message : String(e)).slice(0, 200);
@@ -278,6 +287,31 @@ async function chargeWith(gateway: PixGateway, o: PixInput): Promise<PixCharge> 
     });
     return { ...tx, id: `${PIXBLACK_ORDER_PREFIX}${tx.id}` };
   }
+  if (gateway === "legacy") {
+    // A Legacy exige payerIp. Sem ele (raro), o Pix não sai por aqui e o fallback pula este gateway.
+    if (!o.ip) throw new Error("legacy: payerIp obrigatório");
+    const tx = await legacyPixCashin({
+      amountCents: o.amount,
+      customer: o.customer,
+      address: o.address
+        ? {
+            street: o.address.street,
+            number: o.address.number,
+            zipCode: o.address.zipcode,
+            city: o.address.city,
+            state: o.address.state,
+            ...(o.address.complement ? { complement: o.address.complement } : {}),
+            neighborhood: o.address.neighborhood,
+          }
+        : undefined,
+      description: o.description,
+      referenceId: crypto.randomUUID(),
+      payerIp: o.ip,
+      // Um item só com a descrição genérica (sem detalhes do produto na fatura).
+      items: [{ title: o.description.slice(0, 200), unitPrice: o.amount, quantity: 1 }],
+    });
+    return { ...tx, id: `${LEGACY_ORDER_PREFIX}${tx.id}` };
+  }
   return pixgateCashin({ ...o, postback: webhook });
 }
 
@@ -291,6 +325,7 @@ export async function fetchPixStatus(id: string): Promise<{ status: string; amou
   if (isPaySharkOrderId(id)) return paysharkStatus(id.slice(PAYSHARK_ORDER_PREFIX.length));
   if (isKokuOrderId(id)) return kokuStatus(id.slice(KOKU_ORDER_PREFIX.length));
   if (isPixBlackOrderId(id)) return pixblackStatus(id.slice(PIXBLACK_ORDER_PREFIX.length));
+  if (isLegacyOrderId(id)) return legacyStatus(id.slice(LEGACY_ORDER_PREFIX.length));
   return pixgateStatus(id);
 }
 
