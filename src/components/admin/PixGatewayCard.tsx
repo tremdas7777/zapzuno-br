@@ -8,6 +8,7 @@ import { fmtDateTime } from "@/lib/admin-format";
 import { Pill, SettingCard, SettingHeader } from "./kit";
 import {
   deleteKokuKeyFn,
+  deleteLegacyKeyFn,
   deletePixBlackKeyFn,
   deletePaySharkKeyFn,
   deletePixgateKeyFn,
@@ -15,6 +16,7 @@ import {
   deleteUmbrellaKeyFn,
   getPixGatewayStatus,
   saveKokuKeyFn,
+  saveLegacyKeyFn,
   savePixBlackKeyFn,
   savePaySharkKeyFn,
   savePixgateKeyFn,
@@ -22,6 +24,7 @@ import {
   saveUmbrellaKeyFn,
   setPixGatewayFn,
   testKokuFn,
+  testLegacyFn,
   testPixBlackFn,
   testPaySharkFn,
   testPixgateFn,
@@ -29,8 +32,16 @@ import {
   testUmbrellaFn,
 } from "@/lib/pix-gateway.functions";
 
-type Gateway = "pixgate" | "umbrella" | "sagacepay" | "payshark" | "koku" | "pixblack";
-const GATEWAYS = ["pixgate", "umbrella", "sagacepay", "payshark", "koku", "pixblack"] as const;
+type Gateway = "pixgate" | "umbrella" | "sagacepay" | "payshark" | "koku" | "pixblack" | "legacy";
+const GATEWAYS = [
+  "pixgate",
+  "umbrella",
+  "sagacepay",
+  "payshark",
+  "koku",
+  "pixblack",
+  "legacy",
+] as const;
 type KeyInfo = { key: string | null; source: "admin" | "secret" | null };
 type Status = {
   selected: Gateway;
@@ -47,6 +58,7 @@ const LABEL: Record<Gateway, string> = {
   payshark: "PayShark",
   koku: "Koku",
   pixblack: "Pix Black",
+  legacy: "Legacy Ecom",
 };
 const SECRET: Record<Gateway, string> = {
   pixgate: "PIXGATE_API_KEY",
@@ -55,9 +67,10 @@ const SECRET: Record<Gateway, string> = {
   payshark: "PAYSHARK_API_KEY",
   koku: "KOKU_API_KEY",
   pixblack: "PIXBLACK_API_KEY",
+  legacy: "LEGACY_API_KEY",
 };
 
-/** Escolha do gateway do Pix (PixGate, Umbrella, SagacePay, PayShark, Koku ou Pix Black) + chave de cada um. */
+/** Escolha do gateway do Pix (PixGate, Umbrella, SagacePay, PayShark, Koku, Pix Black ou Legacy Ecom) + chave de cada um. */
 export function PixGatewayCard({ password }: { password: string }) {
   const statusFn = useServerFn(getPixGatewayStatus);
   const setFn = useServerFn(setPixGatewayFn);
@@ -79,6 +92,9 @@ export function PixGatewayCard({ password }: { password: string }) {
   const savePixBlackFn = useServerFn(savePixBlackKeyFn);
   const deletePixBlackFn = useServerFn(deletePixBlackKeyFn);
   const testPixBlack = useServerFn(testPixBlackFn);
+  const saveLegacyFn = useServerFn(saveLegacyKeyFn);
+  const deleteLegacyFn = useServerFn(deleteLegacyKeyFn);
+  const testLegacy = useServerFn(testLegacyFn);
   const keyFns = {
     pixgate: { save: savePixgateFn, remove: deletePixgateFn, test: testPixgate },
     umbrella: { save: saveUmbrellaFn, remove: deleteUmbrellaFn, test: testUmbrella },
@@ -86,6 +102,7 @@ export function PixGatewayCard({ password }: { password: string }) {
     payshark: { save: savePaySharkFn, remove: deletePaySharkFn, test: testPayShark },
     koku: { save: saveKokuFn, remove: deleteKokuFn, test: testKoku },
     pixblack: { save: savePixBlackFn, remove: deletePixBlackFn, test: testPixBlack },
+    legacy: { save: saveLegacyFn, remove: deleteLegacyFn, test: testLegacy },
   };
 
   const [status, setStatus] = useState<Status | null>(null);
@@ -311,7 +328,10 @@ function KeySection({
           )}
         </div>
       </div>
-      {editando && (
+      {editando && gateway === "legacy" && (
+        <LegacyPair busy={busy} onSave={onSave} onDone={() => setEditando(false)} />
+      )}
+      {editando && gateway !== "legacy" && (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Input
             type="password"
@@ -342,5 +362,62 @@ function KeySection({
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * Legacy Ecom tem duas chaves (pública e secreta). O painel pede as duas em campos separados;
+ * o servidor guarda tudo junto no formato pk_live_...:sk_live_... (Basic auth).
+ */
+function LegacyPair({
+  busy,
+  onSave,
+  onDone,
+}: {
+  busy: string | null;
+  onSave: (key: string) => Promise<boolean>;
+  onDone: () => void;
+}) {
+  const [pub, setPub] = useState("");
+  const [sec, setSec] = useState("");
+  const pubOk = /^pk_[A-Za-z0-9_]+$/.test(pub.trim());
+  const secOk = /^sk_[A-Za-z0-9_]+$/.test(sec.trim());
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <Input
+        type="password"
+        autoComplete="off"
+        aria-label="Chave pública da Legacy Ecom"
+        placeholder="Chave pública (pk_live_…)"
+        value={pub}
+        onChange={(e) => setPub(e.target.value)}
+      />
+      <Input
+        type="password"
+        autoComplete="off"
+        aria-label="Chave secreta da Legacy Ecom"
+        placeholder="Chave secreta (sk_live_…)"
+        value={sec}
+        onChange={(e) => setSec(e.target.value)}
+      />
+      <Button
+        disabled={!pubOk || !secOk || !!busy}
+        onClick={() =>
+          onSave(`${pub.trim()}:${sec.trim()}`).then((ok) => {
+            if (ok) {
+              setPub("");
+              setSec("");
+              onDone();
+            }
+          })
+        }
+      >
+        {busy === "save-legacy" ? "Salvando…" : "Salvar chaves"}
+      </Button>
+      <p className="text-xs text-[#98a2b3]">
+        Copie as duas chaves do painel da Legacy em Integrações. Se perder a secreta, gere outro
+        par.
+      </p>
+    </div>
   );
 }

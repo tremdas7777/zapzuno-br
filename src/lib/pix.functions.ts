@@ -23,7 +23,15 @@ import {
   findUpsellOf,
 } from "@/lib/pix-orders.server";
 import { createCardTransaction, CARD_ORDER_PREFIX, getHypercashKeys } from "@/lib/hypercash.server";
-import { createPix } from "@/lib/pix-gateway.server";
+import { createPix, LEGACY_ORDER_PREFIX } from "@/lib/pix-gateway.server";
+import {
+  getLegacyKey,
+  getLegacyPublicKey,
+  legacyCardCharge,
+  LEGACY_API,
+  type LegacyAddress,
+} from "@/lib/legacy.server";
+import { PayerDataError } from "@/lib/pix-errors";
 import { isPaidStatus } from "@/lib/pix-status";
 import { boughtBundle, UPSELL_PRODUCTS, upsellSelection, upsellStepOf } from "@/lib/upsell";
 import { getRequest } from "@tanstack/react-start/server";
@@ -168,7 +176,7 @@ export const createPixCharge = createServerFn({ method: "POST" })
       products: bundle.price + extrasTotal(data),
       frete: freteOpt.price,
       method: "pix",
-      pixDiscount: await isCardEnabled().catch(() => false),
+      pixDiscount: await pixDiscountOn(),
     });
     const amount = totals.total;
     const { ip, ua } = requestMeta();
@@ -214,7 +222,16 @@ export const createPixCharge = createServerFn({ method: "POST" })
     return { id: charge.id, qrcode: charge.qrcode, amount, status: charge.status };
   });
 
-export type CardCharge = { id: string; amount: number; status: string; paid: boolean };
+export type CardCharge = {
+  id: string;
+  amount: number;
+  status: string;
+  paid: boolean;
+  /** 3DS pendente na Legacy: o navegador passa `threeDSecure` inteiro pro SDK (handlePendingThreeDS). */
+  threeDSecurePending?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- resposta do gateway sem tipo
+  threeDSecure?: any;
+};
 
 /** Liga/desliga do cartão no admin (site_settings.card_enabled). DESLIGADO até ativar no painel. */
 async function isCardEnabled(): Promise<boolean> {
@@ -227,10 +244,24 @@ async function isCardEnabled(): Promise<boolean> {
   return data?.value === true;
 }
 
+/**
+ * Desconto do Pix: vale quando o cartão está no ar. Com a chave da Legacy cadastrada o cartão fica
+ * sempre liberado, então o desconto também. Usado tanto na tela (getCardConfig) quanto na cobrança
+ * do Pix, para o valor cobrado bater com o mostrado.
+ */
+async function pixDiscountOn(): Promise<boolean> {
+  if (await getLegacyKey().catch(() => null)) return true;
+  return isCardEnabled().catch(() => false);
+}
+
 /** Com o cartão desligado, quem está logado no admin (mesmo navegador) ainda consegue testar. */
 const isAdmin = (pwd?: string) => senhaAdminOk(pwd);
 
-/** Chave PÚBLICA da HyperCash (pode ir para o navegador; a secreta fica só no servidor). */
+/**
+ * Config do cartão para o checkout. Regra: com a chave da Legacy Ecom cadastrada, o cartão passa
+ * pela Legacy (o SDK dela tokeniza e resolve o 3DS no navegador) e fica sempre no ar. Sem ela, vale
+ * a HyperCash, liberada pelo toggle do /admin (ou para quem está logado no admin).
+ */
 export const getCardConfig = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z
@@ -239,26 +270,98 @@ export const getCardConfig = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const legacyPk = await getLegacyPublicKey().catch(() => null);
+    if (legacyPk) {
+      // A chave pública (pk_…) e a URL do SDK vão para o navegador; a secreta fica só no servidor.
+      return {
+        enabled: true as const,
+        provider: "legacy" as const,
+        publicKey: legacyPk,
+        sdkUrl: `${LEGACY_API}/checkout/sdk/legacy-pay.js`,
+        apiBaseUrl: LEGACY_API,
+        pixDiscount: true,
+      };
+    }
     // Liberado aos clientes no admin = cartão para todos + desconto do Pix.
     const publicOn = await isCardEnabled().catch(() => false);
     const enabled = publicOn || isAdmin(data?.adminPassword);
     const publicKey = enabled ? (await getHypercashKeys().catch(() => null))?.public : null;
-    return { enabled: enabled && !!publicKey, publicKey: publicKey ?? null, pixDiscount: publicOn };
+    return {
+      enabled: enabled && !!publicKey,
+      provider: "hypercash" as const,
+      publicKey: publicKey ?? null,
+      sdkUrl: null,
+      apiBaseUrl: null,
+      pixDiscount: publicOn,
+    };
   });
 
+/**
+ * `prepared.payinCard` do SDK LegacyPay (token + threeDSecure + device + userAgent). Aceito como objeto
+ * opaco: o servidor repassa à Legacy sem validar os campos internos, que o SDK monta.
+ */
+const payinCardSchema = z
+  .object({
+    token: z.string().min(5).max(200),
+    installments: z.number().int().min(1).max(CARD_MAX_INSTALLMENTS),
+  })
+  .passthrough();
+
+/** Metadado público do cartão vindo de `prepared.card` do SDK (sem CVV nem número). */
+const cardMetaSchema = z
+  .object({
+    last4: z
+      .string()
+      .regex(/^\d{4}$/)
+      .optional(),
+    brand: z.string().max(40).optional(),
+  })
+  .optional();
+
 const cardSchema = customerSchema.extend({
-  // Token gerado pelo SDK da HyperCash no navegador. O número do cartão nunca chega aqui.
-  cardHash: z.string().min(10).max(4000),
+  // Cartão HyperCash: token gerado pelo SDK deles no navegador (usado quando a Legacy não está cadastrada).
+  cardHash: z.string().min(10).max(4000).optional(),
+  // Cartão Legacy: payload preparado pelo SDK LegacyPay no navegador. O número do cartão nunca chega aqui.
+  cardPrepared: payinCardSchema.optional(),
+  cardMeta: cardMetaSchema,
+  antifraudSessionId: z.string().min(1).max(300).optional().nullable(),
   installments: z.number().int().min(1).max(CARD_MAX_INSTALLMENTS),
   adminPassword: z.string().max(200).optional(),
 });
 
-/** Cobra no cartão (HyperCash). Preço de tabela, sem o desconto do Pix. */
+/** Resultado de uma cobrança no cartão, igual para a Legacy e a HyperCash. */
+type CardOutcome = {
+  id: string;
+  status: string;
+  paid: boolean;
+  card: { lastDigits?: string; brand?: string } | null;
+  threeDSecurePending: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- resposta do gateway sem tipo
+  threeDSecure: any;
+};
+
+/** Status finais ruins da Legacy (ver /docs/webhooks): nunca grava pedido pago sem ter pago. */
+const LEGACY_BAD_STATUSES = [
+  "refused",
+  "failed",
+  "canceled",
+  "cancelled",
+  "refunded",
+  "chargeback",
+  "med",
+  "expired",
+];
+
+/**
+ * Cobra no cartão. Preço de tabela, sem o desconto do Pix. Com a chave da Legacy cadastrada, a
+ * cobrança vai pela Legacy (payload do SDK LegacyPay); sem ela, segue pela HyperCash como antes.
+ */
 export const createCardCharge = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => cardSchema.parse(d))
   .handler(async ({ data }): Promise<CardCharge> => {
     await ensureCatalog();
-    if (!isAdmin(data.adminPassword) && !(await isCardEnabled()))
+    const legacyKey = await getLegacyKey().catch(() => null);
+    if (!legacyKey && !isAdmin(data.adminPassword) && !(await isCardEnabled()))
       throw new Error("Pagamento com cartão indisponível. Pague com Pix.");
     const { bundle, itemName } = resolveProduct(data);
     if (data.frete === "gratis" && !isFreeShippingEligible(bundle.price + extrasTotal(data))) {
@@ -276,41 +379,100 @@ export const createCardCharge = createServerFn({ method: "POST" })
     });
     const { ip, ua } = requestMeta();
     const a = data.address;
-    const address = {
-      street: a.street,
-      streetNumber: a.number,
-      complement: a.complement || "Sem complemento",
-      zipCode: a.zipcode,
-      neighborhood: a.neighborhood,
-      city: a.city,
-      state: a.state.toUpperCase(),
-      country: "BR" as const,
-    };
-    const tx = await createCardTransaction({
-      amount: totals.total,
-      cardHash: data.cardHash,
-      installments: data.installments,
-      customer: { name: data.name, email: data.email, phone: data.phone, cpf: data.cpf },
-      address,
-      shippingFee: totals.frete,
-      // Nome genérico (igual ao Pix) — sem detalhes do produto real na fatura.
-      items: [
-        { title: brand.gatewayName, unitPrice: Math.round(bundle.price * 100), quantity: 1 },
-        ...chosenExtras(data).map((b) => ({
-          title: b.gatewayName,
-          unitPrice: Math.round(b.price * 100),
-          quantity: 1,
-        })),
-      ],
-      postbackUrl: `${brand.siteUrl}/api/public/pix-webhook?gw=hc`,
-      ip,
-    });
-    if (["refused", "canceled", "cancelled", "failed"].includes(tx.status)) {
-      throw new Error(
-        `Pagamento recusado: ${tx.refusedReason ?? "o banco emissor não informou o motivo"}. Confira os dados do cartão ou pague com Pix.`,
-      );
+    const itemsCents = [
+      { title: brand.gatewayName, unitPrice: Math.round(bundle.price * 100), quantity: 1 },
+      ...chosenExtras(data).map((b) => ({
+        title: b.gatewayName,
+        unitPrice: Math.round(b.price * 100),
+        quantity: 1,
+      })),
+    ];
+    let outcome: CardOutcome;
+    if (legacyKey) {
+      if (!data.cardPrepared) throw new Error("Pagamento com cartão indisponível. Pague com Pix.");
+      const legacyAddress: LegacyAddress = {
+        street: a.street,
+        number: a.number,
+        zipCode: a.zipcode,
+        city: a.city,
+        state: a.state.toUpperCase(),
+        ...(a.complement ? { complement: a.complement } : {}),
+        neighborhood: a.neighborhood,
+      };
+      let tx;
+      try {
+        tx = await legacyCardCharge({
+          amountCents: totals.total,
+          payinCard: data.cardPrepared as Record<string, unknown>,
+          antifraudSessionId: data.antifraudSessionId ?? null,
+          customer: { name: data.name, email: data.email, phone: data.phone, cpf: data.cpf },
+          address: legacyAddress,
+          description: brand.gatewayName,
+          referenceId: crypto.randomUUID(),
+          payerIp: ip ?? "0.0.0.0",
+          items: itemsCents,
+        });
+      } catch (e) {
+        if (e instanceof PayerDataError) throw new Error(e.message);
+        throw e;
+      }
+      // 3DS pendente não é recusa: o navegador resolve o desafio e a página do pedido confirma depois.
+      if (!tx.threeDSecurePending && LEGACY_BAD_STATUSES.includes(tx.status)) {
+        throw new Error("Pagamento recusado. Confira os dados do cartão ou pague com Pix.");
+      }
+      outcome = {
+        id: `${LEGACY_ORDER_PREFIX}${tx.id}`,
+        status: tx.status,
+        paid: isPaidStatus(tx.status),
+        // Últimos 4 e bandeira vêm de `prepared.card` do SDK (não de `prepared.payinCard`).
+        card: data.cardMeta?.last4
+          ? {
+              lastDigits: data.cardMeta.last4,
+              ...(data.cardMeta.brand ? { brand: data.cardMeta.brand } : {}),
+            }
+          : null,
+        threeDSecurePending: tx.threeDSecurePending,
+        threeDSecure: tx.threeDSecurePending ? tx.raw : null,
+      };
+    } else {
+      if (!data.cardHash) throw new Error("Pagamento com cartão indisponível. Pague com Pix.");
+      const address = {
+        street: a.street,
+        streetNumber: a.number,
+        complement: a.complement || "Sem complemento",
+        zipCode: a.zipcode,
+        neighborhood: a.neighborhood,
+        city: a.city,
+        state: a.state.toUpperCase(),
+        country: "BR" as const,
+      };
+      const tx = await createCardTransaction({
+        amount: totals.total,
+        cardHash: data.cardHash,
+        installments: data.installments,
+        customer: { name: data.name, email: data.email, phone: data.phone, cpf: data.cpf },
+        address,
+        shippingFee: totals.frete,
+        // Nome genérico (igual ao Pix) — sem detalhes do produto real na fatura.
+        items: itemsCents,
+        postbackUrl: `${brand.siteUrl}/api/public/pix-webhook?gw=hc`,
+        ip,
+      });
+      if (["refused", "canceled", "cancelled", "failed"].includes(tx.status)) {
+        throw new Error(
+          `Pagamento recusado: ${tx.refusedReason ?? "o banco emissor não informou o motivo"}. Confira os dados do cartão ou pague com Pix.`,
+        );
+      }
+      outcome = {
+        id: `${CARD_ORDER_PREFIX}${tx.id}`,
+        status: tx.status,
+        paid: isPaidStatus(tx.status),
+        card: tx.card ?? null,
+        threeDSecurePending: false,
+        threeDSecure: null,
+      };
     }
-    const id = `${CARD_ORDER_PREFIX}${tx.id}`;
+    const { id, status, paid } = outcome;
     const orderData = {
       createdAt: Date.now(),
       id,
@@ -327,7 +489,7 @@ export const createCardCharge = createServerFn({ method: "POST" })
         itemName,
         method: "card" as const,
         installments: data.installments,
-        ...(tx.card ? { card: tx.card } : {}),
+        ...(outcome.card ? { card: outcome.card } : {}),
       },
       bundleId: bundle.id,
       bundleName: orderName(itemName, data),
@@ -336,11 +498,17 @@ export const createCardCharge = createServerFn({ method: "POST" })
       ua,
     };
     await saveOrder(orderData);
-    const paid = isPaidStatus(tx.status);
     // Aprovado na hora: a conversão é reportada pela página do pedido (getPixStatus → reportPaidOnce).
-    // Em análise: avisa a UTMify como pendente, igual ao Pix gerado.
+    // Em análise ou 3DS pendente: avisa a UTMify como pendente, igual ao Pix gerado.
     if (!paid) await reportPendingToUtmify(orderData);
-    return { id, amount: totals.total, status: tx.status, paid };
+    return {
+      id,
+      amount: totals.total,
+      status,
+      paid,
+      threeDSecurePending: outcome.threeDSecurePending,
+      threeDSecure: outcome.threeDSecure,
+    };
   });
 
 /**

@@ -191,7 +191,7 @@ export async function fetchGatewayStatus(id: string): Promise<{ status: string; 
     // HyperCash já devolve o valor em centavos.
     return { status: tx?.status ?? "processing", amount: tx?.amount ?? 0 };
   }
-  // Pix: Umbrella ("um_"), SagacePay ("sg_"), PayShark ("ps_"), Koku ("ko_") ou PixGate (sem prefixo).
+  // Pix: Umbrella ("um_"), SagacePay ("sg_"), PayShark ("ps_"), Koku ("ko_"), Pix Black ("pb_"), Legacy ("le_") ou PixGate (sem prefixo).
   return fetchPixStatus(id);
 }
 

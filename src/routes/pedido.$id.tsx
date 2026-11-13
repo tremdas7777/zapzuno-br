@@ -118,7 +118,9 @@ function Page() {
       </Shell>
     );
   if (refused) return <Refused />;
-  if (session?.method === "card" || id.startsWith("hc_")) return <WaitingCard session={session} />;
+  // Cartão (HyperCash "hc_" ou Legacy "le_"): sem QR; a confirmação vem do status do servidor (poll acima).
+  if (session?.method === "card" || id.startsWith("hc_") || id.startsWith("le_"))
+    return <WaitingCard session={session} />;
   return <WaitingPix session={session} />;
 }
 

@@ -100,7 +100,7 @@ export function HypercashCard({ password }: { password: string }) {
       <SettingHeader
         icon={<CreditCard />}
         title="Cartão de crédito (HyperCash)"
-        description="Ligado: cartão em até 12x pelo preço cheio e o Pix ganha 10% de desconto. Desligado, os clientes veem só o Pix, mas você, logado neste painel, ainda vê o cartão para testar (abra o checkout nesta mesma aba)."
+        description="Ligado: cartão em até 12x pelo preço cheio e o Pix ganha 10% de desconto. Desligado, os clientes veem só o Pix, mas você, logado neste painel, ainda vê o cartão para testar (abra o checkout nesta mesma aba). Atenção: com a chave da Legacy Ecom cadastrada no card “Gateway do Pix”, o cartão passa pela Legacy e fica sempre ligado; este botão só vale sem ela."
         status={
           enabled === null ? null : live ? (
             <Pill tone="green">Ativo</Pill>

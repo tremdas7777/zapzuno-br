@@ -38,6 +38,7 @@ import {
   savePixBlackKey,
   testPixBlackKey,
 } from "./pixblack.server";
+import { deleteLegacyKey, getLegacyKeySource, saveLegacyKey, testLegacyKey } from "./legacy.server";
 
 const pw = z.object({ password: z.string().min(1).max(200) });
 
@@ -58,7 +59,7 @@ export const getPixGatewayStatus = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => pw.parse(d))
   .handler(async ({ data }) => {
     assertAdmin(data.password);
-    const [state, pixgate, umbrella, sagacepay, payshark, koku, pixblack, lastFallback] =
+    const [state, pixgate, umbrella, sagacepay, payshark, koku, pixblack, legacy, lastFallback] =
       await Promise.all([
         getPixGatewayState(),
         getPixgateKeySource(),
@@ -67,6 +68,7 @@ export const getPixGatewayStatus = createServerFn({ method: "POST" })
         getPaySharkKeySource(),
         getKokuKeySource(),
         getPixBlackKeySource(),
+        getLegacyKeySource(),
         getLastPixFallback().catch(() => null),
       ]);
     return {
@@ -79,6 +81,11 @@ export const getPixGatewayStatus = createServerFn({ method: "POST" })
         payshark: { key: payshark.key ? mask(payshark.key) : null, source: payshark.source },
         koku: { key: koku.key ? mask(koku.key) : null, source: koku.source },
         pixblack: { key: pixblack.key ? mask(pixblack.key) : null, source: pixblack.source },
+        // Par pk_…:sk_…: mostra só o começo da chave pública; a secreta nunca volta para a tela.
+        legacy: {
+          key: legacy.key ? `${legacy.key.split(":")[0]!.slice(0, 8)}••••:••••` : null,
+          source: legacy.source,
+        },
       },
     };
   });
@@ -233,4 +240,29 @@ export const testPixBlackFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertAdmin(data.password);
     return testPixBlackKey();
+  });
+
+/** Par de chaves da Legacy Ecom (pk_…:sk_…). O formato é conferido em saveLegacyKey. */
+export const saveLegacyKeyFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => pw.extend({ key: z.string().trim().min(10).max(500) }).parse(d))
+  .handler(async ({ data }) => {
+    assertAdmin(data.password);
+    await saveLegacyKey(data.key);
+    return { ok: true };
+  });
+
+export const deleteLegacyKeyFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => pw.parse(d))
+  .handler(async ({ data }) => {
+    assertAdmin(data.password);
+    await deleteLegacyKey();
+    return { ok: true };
+  });
+
+/** Valida o par da Legacy sem gerar cobrança nenhuma (GET /whoami). */
+export const testLegacyFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => pw.parse(d))
+  .handler(async ({ data }) => {
+    assertAdmin(data.password);
+    return testLegacyKey();
   });
