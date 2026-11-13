@@ -3,8 +3,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { CircleCheck, Loader2 } from "lucide-react";
-import { createCardFollowUpCharge, createUpsellCharge } from "@/lib/pix.functions";
+import { createUpsellCharge } from "@/lib/pix.functions";
 import { loadPixSession, savePixSession, type PixSession } from "@/lib/pix-session";
+import { useLegacyFollowUp } from "@/lib/legacy-followup";
 import {
   BATTERY_PACKS,
   batteryLabel,
@@ -35,7 +36,6 @@ function Page() {
   const navigate = useNavigate();
   const [session, setSession] = useState<PixSession | null | undefined>(undefined);
   const createFn = useServerFn(createUpsellCharge);
-  const cardFn = useServerFn(createCardFollowUpCharge);
   const [usePix, setUsePix] = useState(false);
   const [pack, setPack] = useState<BatteryPackId>(BATTERY_PACKS[0].id);
 
@@ -53,18 +53,17 @@ function Page() {
 
   const seuKit = batteryPackFor(session?.bundleName);
   const escolhido = batteryPack(pack)!;
-  const isCard = session?.method === "card" && !!session.cardHash && !usePix;
+  const legacy = useLegacyFollowUp(session);
+  // Mesmo cartão pela Legacy (token cvt_live_… da compra). Sem token, cai no Pix.
+  const isCard = session?.method === "card" && !usePix && legacy.ready;
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (isCard) {
-        const r = await cardFn({
-          data: {
-            parentId: id,
-            origin: window.location.origin,
-            cardHash: session!.cardHash!,
-            products: [pack],
-          },
+        const r = await legacy.pay({
+          parentId: id,
+          amountCents: Math.round(escolhido.price * 100),
+          products: [pack],
         });
         return { ...r, qrcode: "", method: "card" as const };
       }
@@ -161,7 +160,9 @@ function Page() {
                 />
                 <span className="flex-1">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-[15px] font-semibold">{b.kits} {b.kits === 1 ? "kit" : "kits"} · {b.kits * 2} jogadores</span>
+                    <span className="text-[15px] font-semibold">
+                      {b.kits} {b.kits === 1 ? "kit" : "kits"} · {b.kits * 2} jogadores
+                    </span>
                     {b.id === seuKit && (
                       <span className="rounded bg-[var(--ck-badge)] px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-[var(--ck-ok)]">
                         Para o seu kit
@@ -208,7 +209,7 @@ function Page() {
 
         <button
           type="button"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || legacy.waiting}
           onClick={() => mutation.mutate()}
           className="mt-5 flex w-full flex-col items-center justify-center rounded-lg bg-[var(--ck-green)] px-6 py-4 text-white shadow-lg transition hover:opacity-90 disabled:opacity-70"
         >

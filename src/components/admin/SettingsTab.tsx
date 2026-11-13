@@ -1,6 +1,5 @@
 /** Configurações do /admin, agrupadas por assunto (pagamento, anúncios, envio, atendimento). */
 import type { ReactNode } from "react";
-import { HypercashCard } from "./HypercashCard";
 import { MetaPixelCard } from "./MetaPixelCard";
 import { PixGatewayCard } from "./PixGatewayCard";
 import { RotasyncCard } from "./RotasyncCard";
@@ -40,7 +39,6 @@ export function SettingsTab({ password }: { password: string }) {
         description="Quem gera o Pix dos pedidos e se o cartão de crédito aparece no checkout."
       >
         <PixGatewayCard password={password} />
-        <HypercashCard password={password} />
       </Grupo>
       <Grupo
         title="Anúncios e rastreamento"

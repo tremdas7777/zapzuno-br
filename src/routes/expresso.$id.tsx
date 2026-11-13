@@ -3,8 +3,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { CircleCheck, Loader2, Truck } from "lucide-react";
-import { createCardFollowUpCharge, createUpsellCharge } from "@/lib/pix.functions";
+import { createUpsellCharge } from "@/lib/pix.functions";
 import { loadPixSession, savePixSession, type PixSession } from "@/lib/pix-session";
+import { useLegacyFollowUp } from "@/lib/legacy-followup";
 import { EXPRESS_SHIPPING } from "@/lib/upsell";
 import { brl } from "@/components/checkout/parts";
 import { Shell } from "@/components/checkout/OrderShell";
@@ -26,7 +27,6 @@ function Page() {
   const navigate = useNavigate();
   const [session, setSession] = useState<PixSession | null | undefined>(undefined);
   const createFn = useServerFn(createUpsellCharge);
-  const cardFn = useServerFn(createCardFollowUpCharge);
   const [usePix, setUsePix] = useState(false);
 
   useEffect(() => {
@@ -37,18 +37,17 @@ function Page() {
     else setSession(s);
   }, [id, navigate]);
 
-  const isCard = session?.method === "card" && !!session.cardHash && !usePix;
+  const legacy = useLegacyFollowUp(session);
+  // Mesmo cartão pela Legacy (token cvt_live_… da compra). Sem token, cai no Pix.
+  const isCard = session?.method === "card" && !usePix && legacy.ready;
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (isCard) {
-        const r = await cardFn({
-          data: {
-            parentId: id,
-            origin: window.location.origin,
-            cardHash: session!.cardHash!,
-            products: ["expresso"],
-          },
+        const r = await legacy.pay({
+          parentId: id,
+          amountCents: Math.round(EXPRESS_SHIPPING.price * 100),
+          products: ["expresso"],
         });
         return { ...r, qrcode: "", method: "card" as const };
       }
@@ -159,7 +158,7 @@ function Page() {
 
         <button
           type="button"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || legacy.waiting}
           onClick={() => mutation.mutate()}
           className="mt-6 flex w-full flex-col items-center justify-center rounded-lg bg-[var(--ck-green)] px-6 py-4 text-white shadow-lg transition hover:opacity-90 disabled:opacity-70"
         >

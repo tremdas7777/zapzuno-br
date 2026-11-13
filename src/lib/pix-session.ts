@@ -35,8 +35,10 @@ export type PixSession = {
   /** Pedido pago no cartão (sem código Pix). */
   method?: "pix" | "card";
   installments?: number;
-  /** Token do cartão gerado pela HyperCash (expira em ~15 min). Só nesta aba, nunca no banco. */
-  cardHash?: string;
+  /** Token do cartão salvo na Legacy (cvt_live_…): só nesta aba, pro upsell no mesmo cartão. */
+  cardToken?: string;
+  /** CPF do dono do cartão (só dígitos), exigido pelo payWithSavedCard da Legacy. Só nesta aba. */
+  cardOwnerDocument?: string;
   /** A tela /pedido já viu o pagamento (eventos de compra disparados uma vez só). */
   paidSeen?: boolean;
 };
@@ -52,7 +54,7 @@ const KEEP_MS = 48 * 60 * 60 * 1000;
 type Kept = PixSession & { savedAt?: number };
 
 function keep(s: PixSession) {
-  const { cardHash: _card, cpf: _cpf, phone: _phone, ...rest } = s;
+  const { cardToken: _ct, cardOwnerDocument: _cd, cpf: _cpf, phone: _phone, ...rest } = s;
   localStorage.setItem(key(s.id), JSON.stringify({ ...rest, savedAt: Date.now() }));
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const k = localStorage.key(i);

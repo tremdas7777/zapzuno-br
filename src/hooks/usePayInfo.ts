@@ -1,23 +1,23 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { getSiteSettings } from "@/lib/site-settings.functions";
+import { getCardConfig } from "@/lib/pix.functions";
 import { CARD_MAX_INSTALLMENTS, PIX_DISCOUNT } from "@/lib/payment-pricing";
 
 /**
- * O que a vitrine pode prometer sobre pagamento: parcelas e desconto no Pix só aparecem com o
- * cartão liberado no admin (o checkout segue a mesma regra).
+ * O que a vitrine pode prometer sobre pagamento: cartão, parcelas e desconto no Pix só aparecem com a
+ * Legacy Ecom cadastrada (mesma regra do checkout, via getCardConfig).
  */
 export function usePayInfo() {
-  const fetchSettings = useServerFn(getSiteSettings);
+  const cardConfigFn = useServerFn(getCardConfig);
   const { data } = useQuery({
-    queryKey: ["site-settings"],
-    queryFn: () => fetchSettings(),
+    queryKey: ["card-config"],
+    queryFn: () => cardConfigFn({ data: {} }),
     staleTime: 60_000,
   });
-  const card = data?.cardEnabled ?? false;
+  const card = data?.enabled === true;
   return {
     card,
     installments: CARD_MAX_INSTALLMENTS,
-    pixOff: card ? PIX_DISCOUNT : 0,
+    pixOff: data?.pixDiscount ? PIX_DISCOUNT : 0,
   };
 }
