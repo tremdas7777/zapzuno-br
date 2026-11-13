@@ -7,6 +7,9 @@ import { Display, Eyebrow, FaqList, FinalCta, Ticker } from "@/components/br/ui"
 import { Reviews } from "@/components/reviews/Reviews";
 import { Alvos, ComoJogar, Comparativo, EmAcao, JeitosDeJogar, ModosTiro, NaCaixa } from "@/components/br/KitSections";
 import { usePayInfo } from "@/hooks/usePayInfo";
+import { useServerFn } from "@tanstack/react-start";
+import { getCardConfig } from "@/lib/pix.functions";
+import { PIX_DISCOUNT, pixPrice as descontoPix } from "@/lib/payment-pricing";
 import { brand } from "@/lib/brand";
 import { metaTrack } from "@/lib/meta-pixel";
 import { trackCheckoutClick } from "@/lib/analytics";
@@ -156,7 +159,15 @@ function Page() {
     navigate({ to: "/checkout", search: { plano: p.id, ...variante } });
   };
 
-  const pixPrice = pay.pixOff ? Math.round(priced.price * (1 - pay.pixOff) * 100) / 100 : 0;
+  // Desconto do Pix só com o cartão ofertado no checkout (flag pixDiscount do getCardConfig).
+  const cardConfigFn = useServerFn(getCardConfig);
+  const [pixOn, setPixOn] = useState(false);
+  useEffect(() => {
+    cardConfigFn({ data: {} })
+      .then((c) => setPixOn(c.pixDiscount))
+      .catch(() => undefined);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const precoPix = pixOn ? descontoPix(priced.price) : priced.price;
 
   return (
     <SiteLayout>
@@ -238,21 +249,17 @@ function Page() {
               <button type="button" onClick={buy} className="btn-buy h-[70px] w-full text-[18px] md:text-[19px]">
                 Comprar agora
               </button>
-              {(pixPrice > 0 || pay.card) && (
-                <p className="mt-2.5 text-center text-[12px] text-[var(--slate)]">
-                  {pixPrice > 0 && (
-                    <>
-                      <b className="text-[var(--ink)]">{brl(pixPrice)}</b> no Pix ({Math.round(pay.pixOff * 100)}% OFF)
-                    </>
-                  )}
-                  {pixPrice > 0 && pay.card && " ou "}
-                  {pay.card && (
-                    <>
-                      {pay.installments}x de {installment(priced.price, pay.installments)} no cartão
-                    </>
-                  )}
-                </p>
-              )}
+              <p className="mt-2.5 text-center text-[12px] text-[var(--slate)]">
+                <b className="text-[var(--ink)]">{brl(precoPix)}</b> no Pix
+                {pixOn && ` (${Math.round(PIX_DISCOUNT * 100)}% OFF)`}
+                {pay.card && (
+                  <>
+                    {" ou "}
+                    <b className="text-[var(--ink)]">{brl(priced.price)}</b> no cartão ({pay.installments}x de{" "}
+                    {installment(priced.price, pay.installments)})
+                  </>
+                )}
+              </p>
               <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[12px] text-[var(--ink)]">
                 <Check className="h-3.5 w-3.5 text-[var(--lime)]" strokeWidth={3} />
                 {FREE_SHIPPING_LABEL} em todo pedido
