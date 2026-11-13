@@ -174,7 +174,7 @@ function Page() {
   const toggleBump = (id: BumpId, on: boolean) =>
     setBumps((cur) => (on ? [...cur.filter((b) => b !== id), id] : cur.filter((b) => b !== id)));
   // Pix vem pré-selecionado (10% de desconto); cartão em até 12x pelo preço de tabela.
-  const [pay, setPay] = useState<"pix" | "card">("pix");
+  const [pay, setPay] = useState<"pix" | "card" | null>(null);
   const [card, setCard] = useState({ number: "", name: "", exp: "", cvv: "" });
   const [installments, setInstallments] = useState(1);
   // Frete grátis só a partir de FREE_SHIPPING_MIN em produtos (validado também no servidor).
@@ -227,13 +227,14 @@ function Page() {
       .then((c) => {
         setCardEnabled(c.enabled);
         setPixDiscountOn(c.pixDiscount);
+        if (!c.enabled) setPay("pix");
         if (c.provider === "legacy" && c.publicKey && c.sdkUrl && c.apiBaseUrl) {
           setLegacyCfg({ publicKey: c.publicKey, sdkUrl: c.sdkUrl, apiBaseUrl: c.apiBaseUrl });
         } else {
           setCardKey(c.publicKey);
         }
       })
-      .catch(() => undefined);
+      .catch(() => setPay("pix"));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Carrega o SDK assim que o cliente escolhe cartão (o 3DS precisa do script antes do envio).
   useEffect(() => {
@@ -763,7 +764,7 @@ function Page() {
               </span>
               <span className="flex-1 text-[15px]">PIX</span>
               <span className="rounded bg-[var(--ck-badge)] px-2 py-0.5 text-[11px] font-bold uppercase text-[var(--ck-ok)]">
-                {pixDiscountOn ? `${Math.round(PIX_DISCOUNT * 100)}% OFF` : "Oferta"}
+                {pay === "pix" && pixDiscountOn ? `${Math.round(PIX_DISCOUNT * 100)}% OFF` : "Oferta"}
               </span>
             </button>
             {pay === "pix" && (
