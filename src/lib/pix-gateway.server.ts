@@ -17,7 +17,12 @@ import { getSagacePayKey, sagaceCashin, sagaceStatus } from "@/lib/sagacepay.ser
 import { getPaySharkKey, paysharkCashin, paysharkStatus } from "@/lib/payshark.server";
 import { getKokuKey, kokuCashin, kokuStatus } from "@/lib/koku.server";
 import { getPixBlackKey, pixblackCashin, pixblackStatus } from "@/lib/pixblack.server";
-import { getLegacyKey, legacyPixCashin, legacyStatus } from "@/lib/legacy.server";
+import {
+  getLegacyFlags,
+  getLegacyKey,
+  legacyPixCashin,
+  legacyStatus,
+} from "@/lib/legacy.server";
 
 export const PIX_GATEWAYS = [
   "pixgate",
@@ -93,15 +98,18 @@ async function savedChoice(): Promise<PixGateway | null> {
 
 /** Quais gateways têm chave cadastrada (painel ou secret do Lovable). */
 async function configured(): Promise<Record<PixGateway, boolean>> {
-  const [umbrella, pixgate, sagacepay, payshark, koku, pixblack, legacy] = await Promise.all([
-    getUmbrellaKey().catch(() => null),
-    getPixgateKey().catch(() => null),
-    getSagacePayKey().catch(() => null),
-    getPaySharkKey().catch(() => null),
-    getKokuKey().catch(() => null),
-    getPixBlackKey().catch(() => null),
-    getLegacyKey().catch(() => null),
-  ]);
+  const [umbrella, pixgate, sagacepay, payshark, koku, pixblack, legacy, flags] = await Promise.all(
+    [
+      getUmbrellaKey().catch(() => null),
+      getPixgateKey().catch(() => null),
+      getSagacePayKey().catch(() => null),
+      getPaySharkKey().catch(() => null),
+      getKokuKey().catch(() => null),
+      getPixBlackKey().catch(() => null),
+      getLegacyKey().catch(() => null),
+      getLegacyFlags().catch(() => ({ card: true, pix: true })),
+    ],
+  );
   return {
     umbrella: !!umbrella,
     pixgate: !!pixgate,
@@ -109,7 +117,8 @@ async function configured(): Promise<Record<PixGateway, boolean>> {
     payshark: !!payshark,
     koku: !!koku,
     pixblack: !!pixblack,
-    legacy: !!legacy,
+    // Pix da Legacy desligado no /admin: não gera Pix por ela (o cartão continua, à parte).
+    legacy: !!legacy && flags.pix,
   };
 }
 
@@ -232,6 +241,9 @@ export async function getLastPixFallback(): Promise<PixFallback | null> {
 async function chargeWith(gateway: PixGateway, o: PixInput): Promise<PixCharge> {
   // Sempre o domínio oficial: o navegador não escolhe para onde o gateway manda os avisos.
   const webhook = `${brand.siteUrl}/api/public/pix-webhook`;
+  if (gateway === "legacy" && !(await getLegacyFlags().catch(() => ({ pix: true }))).pix) {
+    throw new Error("Pix pela Legacy desligado no /admin.");
+  }
   if (gateway === "umbrella") {
     const tx = await createUmbrellaPix({
       amount: o.amount,

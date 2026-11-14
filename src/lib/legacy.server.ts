@@ -374,3 +374,44 @@ export async function testLegacyKey(): Promise<{
     return { ok: false, error: e instanceof Error ? e.message : "Falha de conexão" };
   }
 }
+
+/**
+ * Liga/desliga separado: cartão e Pix pela Legacy. Sem registro = ligado (como antes).
+ * Desligar um não mexe no outro: com o cartão desligado a loja segue com o Pix (no gateway escolhido),
+ * e com o Pix desligado o cartão continua pela Legacy.
+ */
+const FLAG_CARD = "legacy_card_on";
+const FLAG_PIX = "legacy_pix_on";
+
+async function flagOn(key: string): Promise<boolean> {
+  try {
+    const { data } = await (
+      await db()
+    )
+      .from("private_settings")
+      .select("value")
+      .eq("key", key)
+      .maybeSingle();
+    return data?.value !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export async function getLegacyFlags(): Promise<{ card: boolean; pix: boolean }> {
+  const [card, pix] = await Promise.all([flagOn(FLAG_CARD), flagOn(FLAG_PIX)]);
+  return { card, pix };
+}
+
+export async function saveLegacyFlag(kind: "card" | "pix", on: boolean): Promise<void> {
+  const { error } = await (
+    await db()
+  )
+    .from("private_settings")
+    .upsert({
+      key: kind === "card" ? FLAG_CARD : FLAG_PIX,
+      value: on ? "on" : "off",
+      updated_at: new Date().toISOString(),
+    });
+  if (error) throw new Error(error.message);
+}

@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeftRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { fmtDateTime } from "@/lib/admin-format";
 import { Pill, SettingCard, SettingHeader } from "./kit";
@@ -22,6 +23,7 @@ import {
   savePixgateKeyFn,
   saveSagacePayKeyFn,
   saveUmbrellaKeyFn,
+  setLegacyFlagFn,
   setPixGatewayFn,
   testKokuFn,
   testLegacyFn,
@@ -49,6 +51,7 @@ type Status = {
   configured: Record<Gateway, boolean>;
   keys: Record<Gateway, KeyInfo>;
   lastFallback: { from: Gateway; to: Gateway; reason: string; at: string } | null;
+  legacyFlags?: { card: boolean; pix: boolean };
 };
 
 const LABEL: Record<Gateway, string> = {
@@ -95,6 +98,7 @@ export function PixGatewayCard({ password }: { password: string }) {
   const saveLegacyFn = useServerFn(saveLegacyKeyFn);
   const deleteLegacyFn = useServerFn(deleteLegacyKeyFn);
   const testLegacy = useServerFn(testLegacyFn);
+  const setLegacyFlag = useServerFn(setLegacyFlagFn);
   const keyFns = {
     pixgate: { save: savePixgateFn, remove: deletePixgateFn, test: testPixgate },
     umbrella: { save: saveUmbrellaFn, remove: deleteUmbrellaFn, test: testUmbrella },
@@ -140,6 +144,15 @@ export function PixGatewayCard({ password }: { password: string }) {
     run(`set-${gateway}`, async () => {
       await setFn({ data: { password, gateway } });
       return `Pronto: os próximos Pix saem pela ${LABEL[gateway]}. Pedidos já gerados continuam no gateway de origem.`;
+    });
+
+  const toggleLegacy = (kind: "card" | "pix", on: boolean) =>
+    run(`flag-${kind}`, async () => {
+      await setLegacyFlag({ data: { password, kind, on } });
+      const nome = kind === "card" ? "cartão" : "Pix";
+      return on
+        ? `Legacy: ${nome} ligado.`
+        : `Legacy: ${nome} desligado. O outro continua como estava.`;
     });
 
   const saveKey = (gateway: Gateway, key: string) =>
@@ -213,6 +226,39 @@ export function PixGatewayCard({ password }: { password: string }) {
       )}
 
       {status?.lastFallback && <LastFallback f={status.lastFallback} />}
+
+      {status?.keys.legacy.source && (
+        <div className="rounded-lg border border-[#e4e7ec] p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#98a2b3]">
+            Legacy Ecom: cartão e Pix separados
+          </p>
+          <div className="flex flex-col gap-3">
+            {(
+              [
+                ["card", "Cartão pela Legacy", "Mostra o cartão no checkout e no pós-compra."],
+                [
+                  "pix",
+                  "Pix pela Legacy",
+                  "Desligado: o Pix sai pelo gateway escolhido acima.",
+                ],
+              ] as const
+            ).map(([kind, titulo, ajuda]) => (
+              <label key={kind} className="flex items-center justify-between gap-3">
+                <span>
+                  <span className="block text-sm font-medium text-[#101828]">{titulo}</span>
+                  <span className="block text-xs text-[#98a2b3]">{ajuda}</span>
+                </span>
+                <Switch
+                  aria-label={titulo}
+                  checked={status.legacyFlags?.[kind] ?? true}
+                  disabled={!!busy}
+                  onCheckedChange={(on) => toggleLegacy(kind, on)}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#98a2b3]">

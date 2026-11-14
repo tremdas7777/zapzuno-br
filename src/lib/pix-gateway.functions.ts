@@ -38,7 +38,14 @@ import {
   savePixBlackKey,
   testPixBlackKey,
 } from "./pixblack.server";
-import { deleteLegacyKey, getLegacyKeySource, saveLegacyKey, testLegacyKey } from "./legacy.server";
+import {
+  deleteLegacyKey,
+  getLegacyFlags,
+  getLegacyKeySource,
+  saveLegacyFlag,
+  saveLegacyKey,
+  testLegacyKey,
+} from "./legacy.server";
 
 const pw = z.object({ password: z.string().min(1).max(200) });
 
@@ -59,7 +66,7 @@ export const getPixGatewayStatus = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => pw.parse(d))
   .handler(async ({ data }) => {
     assertAdmin(data.password);
-    const [state, pixgate, umbrella, sagacepay, payshark, koku, pixblack, legacy, lastFallback] =
+    const [state, pixgate, umbrella, sagacepay, payshark, koku, pixblack, legacy, lastFallback, legacyFlags] =
       await Promise.all([
         getPixGatewayState(),
         getPixgateKeySource(),
@@ -70,10 +77,12 @@ export const getPixGatewayStatus = createServerFn({ method: "POST" })
         getPixBlackKeySource(),
         getLegacyKeySource(),
         getLastPixFallback().catch(() => null),
+        getLegacyFlags().catch(() => ({ card: true, pix: true })),
       ]);
     return {
       ...state,
       lastFallback,
+      legacyFlags,
       keys: {
         pixgate: { key: pixgate.key ? mask(pixgate.key) : null, source: pixgate.source },
         umbrella: { key: umbrella.key ? mask(umbrella.key) : null, source: umbrella.source },
@@ -265,4 +274,15 @@ export const testLegacyFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertAdmin(data.password);
     return testLegacyKey();
+  });
+
+/** Liga/desliga separado o cartão e o Pix da Legacy (cada um é uma chave em private_settings). */
+export const setLegacyFlagFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    pw.extend({ kind: z.enum(["card", "pix"]), on: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    assertAdmin(data.password);
+    await saveLegacyFlag(data.kind, data.on);
+    return { ok: true };
   });

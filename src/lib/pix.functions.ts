@@ -25,6 +25,7 @@ import {
 } from "@/lib/pix-orders.server";
 import { createPix, LEGACY_ORDER_PREFIX } from "@/lib/pix-gateway.server";
 import {
+  getLegacyFlags,
   getLegacyKey,
   getLegacyPublicKey,
   legacyCardCharge,
@@ -251,8 +252,15 @@ async function isCardEnabled(): Promise<boolean> {
  * sempre liberado, então o desconto também. Usado tanto na tela (getCardConfig) quanto na cobrança
  * do Pix, para o valor cobrado bater com o mostrado.
  */
+/** Chave da Legacy só quando o cartão dela está ligado no /admin (null = cartão desligado). */
+async function legacyCardKey(): Promise<string | null> {
+  const flags = await getLegacyFlags().catch(() => ({ card: true, pix: true }));
+  if (!flags.card) return null;
+  return getLegacyKey().catch(() => null);
+}
+
 async function pixDiscountOn(): Promise<boolean> {
-  return !!(await getLegacyKey().catch(() => null));
+  return !!(await legacyCardKey());
 }
 
 /** Com o cartão desligado, quem está logado no admin (mesmo navegador) ainda consegue testar. */
@@ -271,7 +279,7 @@ export const getCardConfig = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const legacyPk = await getLegacyPublicKey().catch(() => null);
+    const legacyPk = (await legacyCardKey()) ? await getLegacyPublicKey().catch(() => null) : null;
     if (legacyPk) {
       // A chave pública (pk_…) e a URL do SDK vão para o navegador; a secreta fica só no servidor.
       return {
@@ -359,7 +367,7 @@ export const createCardCharge = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => cardSchema.parse(d))
   .handler(async ({ data }): Promise<CardCharge> => {
     await ensureCatalog();
-    const legacyKey = await getLegacyKey().catch(() => null);
+    const legacyKey = await legacyCardKey();
     if (!legacyKey) throw new Error("Pagamento com cartão indisponível. Pague com Pix.");
     const { bundle, itemName } = resolveProduct(data);
     if (data.frete === "gratis" && !isFreeShippingEligible(bundle.price + extrasTotal(data))) {
@@ -508,7 +516,7 @@ export const createLegacyCardFollowUpCharge = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }): Promise<CardCharge> => {
-    if (!(await getLegacyKey().catch(() => null))) {
+    if (!(await legacyCardKey())) {
       throw new Error("Pagamento com cartão indisponível. Pague com Pix.");
     }
     const parent = await getOrder(data.parentId);
