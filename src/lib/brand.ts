@@ -5,7 +5,7 @@
 export const brand = {
   name: "ZAPZUNO",
   /** Endereço oficial da loja (domínio da GoDaddy, apontado para a Vercel). */
-  siteUrl: "https://zapzuno.shop",
+  siteUrl: "https://zapzuno.site",
   /** Linha pequena embaixo do nome no logo. */
   logoTagline: "Laser tag com projetor",
   productName: "Projetor Laser Tag ZAPZUNO",

@@ -5,8 +5,8 @@
 import { brand } from "@/lib/brand";
 
 const LOJAS = [
-  "https://beamrivals.store",
-  "https://zapzuno.shop",
+  "https://beamrivals.site",
+  "https://zapzuno.site",
   "https://handspeed.store",
   "https://teiastore.online",
   "https://banguelashop.store",
