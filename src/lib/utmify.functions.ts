@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { senhaAdminOk } from "@/lib/admin-guard.server";
 import { z } from "zod";
+import { brand } from "@/lib/brand";
 import {
   deleteUtmifyToken,
   getUtmifyToken,
@@ -50,21 +51,23 @@ export const sendUtmifyTest = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     assertAdmin(data.password);
     const pending = data.status === "waiting_payment";
-    // isTest: a UTMify valida token e formato, mas o pedido NÃO entra nas vendas nem na contabilidade.
+    // Teste pago: isTest (a UTMify valida, mas NÃO entra no faturamento).
+    // Teste pendente: vai como pedido pendente de verdade (R$ 1,00, nunca aprovado) para disparar a
+    // notificação de venda pendente no app da UTMify. Fica só em "Vendas pendentes", não no faturamento.
     return sendUtmifyOrder({
-      isTest: true,
+      isTest: !pending,
       orderId: `teste-${pending ? "pendente" : "pago"}-${Date.now()}`,
       status: data.status,
       createdAt: Date.now(),
       approvedAt: pending ? null : Date.now(),
       customer: {
-        name: "Maria Teste Silva",
-        email: "maria.teste@exemplo.com",
+        name: "TESTE PAINEL (ignorar)",
+        email: "teste.painel@exemplo.com",
         phone: "11999999999",
         document: "52998224725",
       },
-      products: [{ id: "60", name: "Kit 60 dias", priceInCents: 44730 }],
-      amountCents: 44730,
+      products: [{ id: "teste", name: `TESTE - ${brand.productName}`, priceInCents: 100 }],
+      amountCents: 100,
       utm: { utm_source: "teste" },
     });
   });

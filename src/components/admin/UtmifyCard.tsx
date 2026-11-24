@@ -81,7 +81,9 @@ export function UtmifyCard({ password }: UtmifyCardProps) {
       const r = await testFn({ data: { password, status } });
       setMsg(
         r.ok
-          ? `Conexão OK: a UTMify aceitou o formato de pedido ${status === "paid" ? "pago" : "pendente"}. (Enviado como teste — não entra nas vendas.)`
+          ? status === "paid"
+            ? "Conexão OK: a UTMify aceitou o formato de pedido pago. (Enviado como teste — não entra nas vendas.)"
+            : "Pedido pendente de teste enviado (R$ 1,00, \"TESTE PAINEL\"). Deve chegar a notificação de venda pendente no app da UTMify; não entra no faturamento."
           : `A UTMify recusou (HTTP ${r.status ?? "?"}): ${r.error ?? "sem detalhes"}`,
       );
     } catch {
